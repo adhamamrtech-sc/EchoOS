@@ -4,7 +4,10 @@ from . import apps_files, system_network
 # Only actions listed here can run. Add a line when a new action is reviewed.
 ALLOWED_ACTIONS = {
     "open_app": apps_files.open_app,
-    "volume_up": system_network.volume_up,
+    "set_volume": system_network.set_volume,
+    "set_brightness": system_network.set_brightness,
+    "lock_screen": system_network.lock_screen,
+    "get_network_status": system_network.get_network_status,
 }
 
 
@@ -14,4 +17,7 @@ def run(intent):
     handler = ALLOWED_ACTIONS.get(action)
     if handler is None:
         return {"status": "error", "message": f"Unknown action: {action}"}
-    return handler(intent)
+    try:
+        return handler(intent)
+    except NotImplementedError:
+        return {"status": "error", "message": f"{action} is not implemented yet."}
