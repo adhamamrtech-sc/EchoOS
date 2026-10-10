@@ -1,6 +1,6 @@
 """Text normalization shared by every other NLU module."""
 
-import re
+import re    
 
 
 DIACRITICS_AND_TATWEEL = re.compile(r"[\u064B-\u0652\u0640]")

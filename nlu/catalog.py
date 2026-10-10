@@ -462,7 +462,7 @@ KEYWORDS = sorted(
 # EXAMPLE INDEX
 # ============================================================
 
-SAFE_COMMANDS = [
+SAFE_COMMANDS = [          
     command
     for command in COMMANDS
     if not command.dangerous

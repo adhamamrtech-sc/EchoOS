@@ -23,7 +23,7 @@ TARGET_FILLERS = {
     "برنامج",
     "تطبيق",
 }
-
+        
 
 def build_alias_table(mapping: dict) -> list[tuple[str, str]]:
     pairs = [

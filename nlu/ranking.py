@@ -16,7 +16,7 @@ MEDIUM_THRESHOLD = 0.55
 def keyword_score(text: str, command: Command) -> float:
     """Return 1.0 when a command keyword is found."""
     return 1.0 if contains_phrase(text, command.keywords) else 0.0
-
+    
 
 def rank_candidates(
     text: str,

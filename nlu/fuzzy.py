@@ -3,7 +3,7 @@
 from rapidfuzz import fuzz, process
 
 from .catalog import EXAMPLE_OWNERS, EXAMPLE_TEXTS, Command
-
+       
 
 def generate_candidates(text: str, top_n: int = 5) -> list[tuple[Command, float]]:
     """

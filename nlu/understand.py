@@ -12,7 +12,7 @@ from .normalize import normalize, strip_fillers
 from .ranking import (
     FUZZY_CONFIDENT,
     MEDIUM_THRESHOLD,
-    confidence_label,
+    confidence_label,    
     rank_candidates,
 )
 from .rules import is_verb_only, match_rule

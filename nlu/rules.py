@@ -1,6 +1,6 @@
 """Fast deterministic rule-based matching."""
 
-from typing import Optional
+from typing import Optional  
 
 from .catalog import (
     CLOSE_VERBS,

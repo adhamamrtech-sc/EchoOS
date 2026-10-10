@@ -4,7 +4,7 @@ from .catalog import EXAMPLE_OWNERS, EXAMPLE_TEXTS
 
 
 MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
-
+  
 _model = None
 _model_failed = False
 _example_vectors = None
