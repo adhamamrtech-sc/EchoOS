@@ -4,6 +4,8 @@ import json
 import wave 
 from faster_whisper import WhisperModel
 import vosk
+import numpy as np 
+import scipy.io.wavfile as wav 
 
 #experimental audio file
 audio_file = "sample.wav"
@@ -19,7 +21,14 @@ def test_faster_whisper(audio_path):
 
     #transcribe operation
     transcribe_start = time.time()
-    segments, info = model.transcribe(audio_path, beam_size=5)
+    samole_rate, audio_data = wav.read(audio_path)
+    if audio_data.dtype == np.int16:
+        audio_data = audio_data.astype(np.float32) / 32768.0
+    elif audio_data.dtype == np.int32:
+        audio_data.astype(np.float32) / 2147483648.0
+
+    segments, info = model.transcribe(audio_data, beam_size=10)
+
     text = "".join([segment.text for segment in segments]).strip()
     transcribe_time = time.time() - transcribe_start
     print(f"the output text: {text}")
@@ -29,13 +38,13 @@ def test_faster_whisper(audio_path):
 
 
 def test_vosk(audio_path, model_path="model"):
-    print("n\--- 2.vosk test ---")
+    print("\n--- 2.vosk test ---")
 
     if not os.path.exists(model_path):
         print("error vosk model folder not found. please download it frist")
         return 0, ""
     start_time = time.time()
-    model = vosk.Models(model_path)
+    model = vosk.Model(model_path)
     load_time = time.time() - start_time
     print(f"model downloaded in: {load_time:.2f} sec")
     wf = wave.open(audio_path, "rb")
@@ -47,11 +56,11 @@ def test_vosk(audio_path, model_path="model"):
         data = wf.readframes(4000)
         if len(data) == 0:
             break
-        if rec.AcceptWavefrom(data):
+        if rec.AcceptWaveform(data):
             res = json.loads(rec.Result())
             results.append(res.get("text", ""))
     final_res = json.loads(rec.FinalResult())
-    results.append(final_res("text", ""))
+    results.append(final_res.get("text", ""))
 
     text = "".join(results).strip()
     transcribe_time = time.time() - transcribe_start
@@ -66,4 +75,5 @@ if __name__ == "__main__":
     else:
         print("=== comparison between  faster-whisper and vosk ===")
         whisper_time, whisper_text = test_faster_whisper(audio_file)
+        vosk.SetLogLevel(-1)
         vosk_time, vosk_text = test_vosk(audio_file)    
