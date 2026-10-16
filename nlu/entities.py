@@ -153,8 +153,7 @@ def extract_params(command, entities: dict, rest: str = "") -> dict:
     if command.action == "list_files" and "folder" in entities:
         return {"folder": entities["folder"]}
 
-    if command.needs == "folder" and rest and "folder" not in entities:
-        return {}
+    
 
     return {}
 

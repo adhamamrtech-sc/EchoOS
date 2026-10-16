@@ -30,7 +30,7 @@ APPS = {
         "visual studio code",
         "في اس كود",
         "فيجوال ستوديو كود",
-        "vs",
+        
     ],
     "terminal": [
         "terminal",
@@ -383,6 +383,7 @@ STATIC_COMMANDS = [
             "مسح",
         ],
         needs="filename",
+        dangerous=True,
     ),
     make_command(
         "list_files",

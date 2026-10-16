@@ -1,5 +1,5 @@
 """Semantic search using multilingual embeddings."""
-
+import numpy as np
 from .catalog import EXAMPLE_OWNERS, EXAMPLE_TEXTS
 
 
