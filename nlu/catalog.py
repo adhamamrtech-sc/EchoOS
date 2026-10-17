@@ -1,15 +1,16 @@
-"""Command catalog: the single source of truth for the NLU."""
 
+"""Command catalog: the single source of truth for the NLU."""
+ 
 from dataclasses import dataclass
 from typing import Optional
-
+ 
 from .normalize import normalize
-
-
+ 
+ 
 # ============================================================
 # APPLICATIONS
 # ============================================================
-
+ 
 APPS = {
     "chrome": [
         "chrome",
@@ -29,8 +30,7 @@ APPS = {
         "vscode",
         "visual studio code",
         "في اس كود",
-        "فيجوال ستوديو كود",
-        
+
     ],
     "terminal": [
         "terminal",
@@ -64,12 +64,12 @@ APPS = {
         "الاعدادات",
     ],
 }
-
-
+ 
+ 
 # ============================================================
 # FOLDERS
 # ============================================================
-
+ 
 FOLDERS = {
     "documents": [
         "documents",
@@ -93,12 +93,41 @@ FOLDERS = {
         "الصور",
     ],
 }
-
-
+ 
+ 
+# ============================================================
+# SYSTEM METRICS (for system_info)
+# ============================================================
+ 
+METRICS = {
+    "cpu": [
+        "cpu",
+        "processor",
+        "المعالج",
+        "البروسيسور",
+    ],
+    "ram": [
+        "ram",
+        "memory",
+        "الرام",
+        "رام",
+        "الذاكرة",
+    ],
+    "disk": [
+        "disk",
+        "storage",
+        "hard disk",
+        "القرص",
+        "الهارد",
+        "التخزين",
+    ],
+}
+ 
+ 
 # ============================================================
 # VERBS
 # ============================================================
-
+ 
 OPEN_VERBS = [
     normalize(verb)
     for verb in [
@@ -115,7 +144,7 @@ OPEN_VERBS = [
         "ابدأ",
     ]
 ]
-
+ 
 CLOSE_VERBS = [
     normalize(verb)
     for verb in [
@@ -128,12 +157,12 @@ CLOSE_VERBS = [
         "سكر",
     ]
 ]
-
-
+ 
+ 
 # ============================================================
 # COMMAND
 # ============================================================
-
+ 
 @dataclass
 class Command:
     action: str
@@ -142,13 +171,13 @@ class Command:
     keywords: list[str]
     needs: Optional[str] = None
     dangerous: bool = False
-
+ 
     @property
     def key(self) -> str:
         """Unique command identifier."""
         return f"{self.action}:{self.target}"
-
-
+ 
+ 
 def make_command(
     action,
     target,
@@ -166,12 +195,12 @@ def make_command(
         needs=needs,
         dangerous=dangerous,
     )
-
-
+ 
+ 
 # ============================================================
 # STATIC COMMANDS
 # ============================================================
-
+ 
 STATIC_COMMANDS = [
     make_command(
         "open_app",
@@ -407,45 +436,184 @@ STATIC_COMMANDS = [
             "اعرض لي الملفات",
         ],
     ),
+    # ---------------- NEW COMMANDS ----------------
+    make_command(
+        "create_file",
+        "file",
+        [
+            "create file notes.txt",
+            "create a new file test.txt",
+            "make file report.docx",
+            "انشئ ملف notes.txt",
+            "اعمل ملف test.txt",
+        ],
+        [
+            "create file",
+            "create a file",
+            "create new file",
+            "create a new file",
+            "new file",
+            "make file",
+            "make a file",
+            "انشئ ملف",
+            "انشاء ملف",
+            "انشي ملف",
+            "اعمل ملف",
+            "عمل ملف",
+            "سوي ملف",
+            "ملف جديد",
+        ],
+        needs="filename",
+    ),
+    make_command(
+        "create_folder",
+        "folder",
+        [
+            "create folder projects",
+            "create a new folder my files",
+            "make folder photos",
+            "انشئ مجلد مشاريع",
+            "اعمل فولدر صور",
+        ],
+        [
+            "create folder",
+            "create a folder",
+            "create new folder",
+            "create a new folder",
+            "new folder",
+            "make folder",
+            "make a folder",
+            "mkdir",
+            "انشئ مجلد",
+            "انشئ فولدر",
+            "انشاء مجلد",
+            "انشاء فولدر",
+            "انشي مجلد",
+            "انشي فولدر",
+            "اعمل مجلد",
+            "اعمل فولدر",
+            "عمل مجلد",
+            "عمل فولدر",
+            "سوي مجلد",
+            "سوي فولدر",
+            "مجلد جديد",
+            "فولدر جديد",
+        ],
+        needs="foldername",
+    ),
+    make_command(
+        "rename_file",
+        "file",
+        [
+            "rename old.txt to new.txt",
+            "rename file a.pdf to b.pdf",
+            "غير اسم الملف old.txt الى new.txt",
+            "اعد تسمية الملف a.txt الى b.txt",
+        ],
+        [
+            "rename file",
+            "rename",
+            "غير اسم الملف",
+            "غير اسم",
+            "اعادة تسمية الملف",
+            "اعادة تسمية",
+            "اعد تسمية الملف",
+            "اعد تسمية",
+        ],
+        needs="rename",
+    ),
+    make_command(
+        "show_processes",
+        "system",
+        [
+            "show processes",
+            "list running processes",
+            "show running processes",
+            "اعرض العمليات",
+            "اظهر العمليات الشغالة",
+        ],
+        [
+            "show processes",
+            "list processes",
+            "running processes",
+            "processes",
+            "اعرض العمليات",
+            "اظهر العمليات",
+            "عرض العمليات",
+            "العمليات",
+        ],
+    ),
+    make_command(
+        "system_info",
+        "system",
+        [
+            "show cpu usage",
+            "show ram usage",
+            "show disk usage",
+            "system info",
+            "how much memory is used",
+            "اعرض استخدام المعالج",
+            "معلومات النظام",
+            "كام استخدام الرام",
+        ],
+        [
+            "system info",
+            "system usage",
+            "system resources",
+            "memory usage",
+            "disk usage",
+            "cpu usage",
+            "cpu",
+            "ram",
+            "معلومات النظام",
+            "موارد النظام",
+            "استخدام المعالج",
+            "استخدام الذاكرة",
+            "استخدام الرام",
+            "استخدام القرص",
+            "المعالج",
+            "الرام",
+        ],
+    ),
 ]
-
-
+ 
+ 
 # ============================================================
 # APP / FOLDER EXAMPLES FOR FUZZY + SEMANTIC
 # ============================================================
-
+ 
 def build_app_examples() -> list[tuple[Command, str]]:
     """Attach extra bilingual examples to open/close app commands."""
     open_command = next(command for command in STATIC_COMMANDS if command.action == "open_app")
     close_command = next(command for command in STATIC_COMMANDS if command.action == "close_app")
     extra = []
-
+ 
     open_verbs = ["open", "افتح", "شغل"]
     close_verbs = ["close", "اقفل", "اغلق"]
-
+ 
     for aliases in APPS.values():
         for alias in aliases:
             for verb in open_verbs:
                 extra.append((open_command, normalize(f"{verb} {alias}")))
             for verb in close_verbs:
                 extra.append((close_command, normalize(f"{verb} {alias}")))
-
+ 
     return extra
-
-
+ 
+ 
 COMMANDS = STATIC_COMMANDS
-
+ 
 COMMAND_BY_KEY = {
     command.key: command
     for command in COMMANDS
 }
-
+ 
 COMMAND_BY_ACTION = {
     command.action: command
     for command in COMMANDS
 }
-
-
+ 
+ 
 # Longest keywords first so "open folder" wins over "open",
 # and "اقفل الجهاز" wins over "اقفل".
 KEYWORDS = sorted(
@@ -457,30 +625,30 @@ KEYWORDS = sorted(
     ),
     key=lambda pair: -len(pair[0]),
 )
-
-
+ 
+ 
 # ============================================================
 # EXAMPLE INDEX
 # ============================================================
-
-SAFE_COMMANDS = [          
+ 
+SAFE_COMMANDS = [
     command
     for command in COMMANDS
     if not command.dangerous
 ]
-
+ 
 EXAMPLE_TEXTS = []
 EXAMPLE_OWNERS = []
-
+ 
 seen_examples = set()
-
+ 
 for command in SAFE_COMMANDS:
     for example in command.examples:
         if example and example not in seen_examples:
             seen_examples.add(example)
             EXAMPLE_TEXTS.append(example)
             EXAMPLE_OWNERS.append(command)
-
+ 
 for command, example in build_app_examples():
     if example and example not in seen_examples:
         seen_examples.add(example)
