@@ -61,7 +61,26 @@ def lock_screen(intent):
 
 
 def get_system_info(intent):
-    return _run(["uname", "-a"], None)
+    """Report CPU, RAM and disk usage (psutil); fall back to `uname -a`."""
+    try:
+        import psutil
+    except ImportError:
+        return _run(["uname", "-a"], None)
+
+    metrics = intent.get("params", {}).get("metrics") or ["cpu", "ram", "disk"]
+    parts = []
+
+    if "cpu" in metrics:
+        parts.append(f"CPU {psutil.cpu_percent(interval=0.5):.0f}%")
+    if "ram" in metrics:
+        parts.append(f"RAM {psutil.virtual_memory().percent:.0f}% used")
+    if "disk" in metrics:
+        parts.append(f"Disk {psutil.disk_usage('/').percent:.0f}% used")
+
+    if not parts:
+        return {"status": "error", "message": "No known metric was asked for."}
+
+    return {"status": "ok", "message": ", ".join(parts)}
 
 
 # ------------------- NETWORK ACTIONS -------------------

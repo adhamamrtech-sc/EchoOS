@@ -30,7 +30,7 @@ def run_benchmark():
         audio_path = test["audio_path"]
         expected = test["expected_text"].strip().lower()
 
-        print("\n--- test case #{i}: [{audio_path}] ---")
+        print(f"\n--- test case #{i}: [{audio_path}] ---")
         print(f"Expected Text :\"{expected}\"")
         try:
             audio_data = load_audio_file(audio_path)

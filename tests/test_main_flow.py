@@ -60,9 +60,13 @@ def test_main_is_runnable_as_a_script():
 
 
 @pytest.mark.parametrize("answer, expected", [
-    ("Yes.", True), ("yes, please", True), ("Yeah!", True), ("ايوه", True), ("أيوه", True),
+    ("Yes.", True), ("yes, please", True), ("Yeah!", True), ("yes yes", True),
+    ("do it", True), ("Go ahead.", True), ("ok", True), ("sure, thanks", True),
+    ("ايوه", True), ("أيوه", True), ("نعم نفذ", True), ("اه من فضلك", True),
     ("yesterday", False), ("not sure", False), ("No.", False), ("maybe", False),
-    ("", False), (None, False), ("لا", False),
+    ("I didn't say yes", False), ("I said yes yesterday", False),
+    ("yes but wait", False), ("yes, cancel it", False), ("do not do it", False),
+    ("yes turn it off", False), ("", False), (None, False), ("لا", False),
 ])
 def test_is_yes(answer, expected):
     loaded, _ = load_main(["x"])
@@ -94,7 +98,7 @@ def test_wifi_off_runs_only_after_a_clear_yes():
 
 
 @pytest.mark.parametrize("answer", [
-    "no", "No, cancel", "yesterday", "I am not sure", "maybe", "", "لا", "بلاش",
+    "no", "No, cancel", "yesterday", "I am not sure", "maybe", "I didn't say yes", "", "لا", "بلاش",
 ])
 def test_wifi_off_is_cancelled_without_a_clear_yes(answer):
     said, sub = run_flow(["turn off wifi", answer])
