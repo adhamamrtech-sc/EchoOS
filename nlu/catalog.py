@@ -171,11 +171,17 @@ class Command:
     keywords: list[str]
     needs: Optional[str] = None
     dangerous: bool = False
+    params: Optional[dict] = None
  
     @property
     def key(self) -> str:
-        """Unique command identifier."""
-        return f"{self.action}:{self.target}"
+        """Unique command identifier (fixed params keep on/off apart)."""
+        suffix = ""
+        if self.params:
+            suffix = ":" + ",".join(
+                f"{name}={value}" for name, value in sorted(self.params.items())
+            )
+        return f"{self.action}:{self.target}{suffix}"
  
  
 def make_command(
@@ -185,6 +191,7 @@ def make_command(
     keywords,
     needs=None,
     dangerous=False,
+    params=None,
 ) -> Command:
     """Create a normalized Command object."""
     return Command(
@@ -194,6 +201,7 @@ def make_command(
         keywords=[normalize(keyword) for keyword in keywords],
         needs=needs,
         dangerous=dangerous,
+        params=params,
     )
  
  
@@ -389,7 +397,6 @@ STATIC_COMMANDS = [
             "فوليوم",
             "اضبط الصوت",
             "خلي الصوت",
-            "علي الصوت",
             "وطي الصوت",
         ],
         needs="number",
@@ -544,7 +551,7 @@ STATIC_COMMANDS = [
         ],
     ),
     make_command(
-        "system_info",
+        "get_system_info",
         "system",
         [
             "show cpu usage",
@@ -579,6 +586,119 @@ STATIC_COMMANDS = [
  
  
 # ============================================================
+# SYSTEM / NETWORK COMMANDS (match actions/system_network.py)
+# ============================================================
+ 
+WIFI_NAMES = ["wifi", "wi-fi", "wi fi", "الواي فاي", "واي فاي", "الوايفاي", "وايفاي"]
+BLUETOOTH_NAMES = ["bluetooth", "blue tooth", "البلوتوث", "بلوتوث", "البلو توث"]
+ 
+ON_EN = ["turn on", "enable", "switch on"]
+OFF_EN = ["turn off", "disable", "switch off"]
+ON_AR = ["شغل", "اشغل", "شغلي", "افتح", "فعل"]
+OFF_AR = ["اقفل", "اقفلي", "اغلق", "سكر", "طفي", "اطفي", "وقف"]
+ 
+ 
+def switch_phrases(names: list[str], state: str) -> list[str]:
+    """Build every 'turn on/off <name>' phrase for a device."""
+    english = ON_EN if state == "on" else OFF_EN
+    arabic = ON_AR if state == "on" else OFF_AR
+    phrases = []
+ 
+    for name in names:
+        for verb in english:
+            phrases += [f"{verb} {name}", f"{verb} the {name}"]
+        phrases += [f"turn {name} {state}", f"{name} {state}"]
+        for verb in arabic:
+            phrases.append(f"{verb} {name}")
+ 
+    return phrases
+ 
+ 
+def switch_examples(state: str, name_en: str, name_ar: str) -> list[str]:
+    """A few natural examples for fuzzy and semantic matching."""
+    if state == "on":
+        return [f"turn on {name_en}", f"enable {name_en}", f"شغل {name_ar}", f"افتح {name_ar}"]
+    return [f"turn off {name_en}", f"disable {name_en}", f"اقفل {name_ar}", f"طفي {name_ar}"]
+ 
+ 
+SYSTEM_NETWORK_COMMANDS = [
+    make_command(
+        "volume_up",
+        "system",
+        ["volume up", "make it louder", "raise the volume", "ارفع الصوت", "علي الصوت", "زود الصوت"],
+        [
+            "volume up", "turn the volume up", "turn up the volume",
+            "raise the volume", "increase the volume", "turn the sound up",
+            "turn up the sound", "sound up", "make it louder",
+            "make the sound louder", "louder",
+            "ارفع الصوت", "علي الصوت", "زود الصوت", "اعلي الصوت",
+        ],
+    ),
+    make_command(
+        "set_brightness",
+        "screen",
+        ["set brightness to 50", "brightness 70", "اضبط السطوع على 50", "خلي الاضاءه 60"],
+        [
+            "set brightness", "brightness", "screen brightness",
+            "السطوع", "اضبط السطوع", "سطوع الشاشه",
+            "الاضاءه", "خلي الاضاءه", "اضبط الاضاءه",
+        ],
+        needs="number",
+    ),
+    make_command(
+        "lock_screen",
+        "screen",
+        ["lock the screen", "lock my computer", "lock screen", "اقفل الشاشه", "قفل الشاشه"],
+        [
+            "lock screen", "lock the screen", "lock my screen",
+            "lock my computer", "lock the computer", "lock my pc",
+            "اقفل الشاشه", "اقفلي الشاشه", "قفل الشاشه",
+        ],
+    ),
+    make_command(
+        "set_wifi",
+        "wifi",
+        switch_examples("on", "wifi", "الواي فاي"),
+        switch_phrases(WIFI_NAMES, "on"),
+        params={"state": "on"},
+    ),
+    make_command(
+        "set_wifi",
+        "wifi",
+        switch_examples("off", "wifi", "الواي فاي"),
+        switch_phrases(WIFI_NAMES, "off"),
+        params={"state": "off"},
+    ),
+    make_command(
+        "set_bluetooth",
+        "bluetooth",
+        switch_examples("on", "bluetooth", "البلوتوث"),
+        switch_phrases(BLUETOOTH_NAMES, "on"),
+        params={"state": "on"},
+    ),
+    make_command(
+        "set_bluetooth",
+        "bluetooth",
+        switch_examples("off", "bluetooth", "البلوتوث"),
+        switch_phrases(BLUETOOTH_NAMES, "off"),
+        params={"state": "off"},
+    ),
+    make_command(
+        "get_network_status",
+        "network",
+        [
+            "network status", "show network status", "am i connected to the internet",
+            "حاله الشبكه", "حاله الانترنت",
+        ],
+        [
+            "network status", "wifi status", "wi-fi status", "internet status",
+            "connection status", "حاله الشبكه", "حاله الانترنت", "حاله الواي فاي",
+        ],
+    ),
+]
+ 
+
+# ============================================================
 # APP / FOLDER EXAMPLES FOR FUZZY + SEMANTIC
 # ============================================================
  
@@ -601,6 +721,8 @@ def build_app_examples() -> list[tuple[Command, str]]:
     return extra
  
  
+STATIC_COMMANDS = STATIC_COMMANDS + SYSTEM_NETWORK_COMMANDS
+
 COMMANDS = STATIC_COMMANDS
  
 COMMAND_BY_KEY = {

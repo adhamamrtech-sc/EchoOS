@@ -11,6 +11,7 @@ from .fuzzy import generate_candidates
 from .normalize import normalize, strip_fillers
 from .ranking import (
     FUZZY_CONFIDENT,
+    HIGH_THRESHOLD,
     MEDIUM_THRESHOLD,
     confidence_label,    
     rank_candidates,
@@ -84,7 +85,9 @@ def understand_with_fallback(text: str, entities: dict) -> dict:
     semantic_scores = semantic_search(text)
 
     if not semantic_scores:
-        if best_fuzzy_score < MEDIUM_THRESHOLD:
+        # Without semantic search a weak fuzzy match is only a guess,
+        # and a wrong guess runs the wrong command. Ask again instead.
+        if best_fuzzy_score < HIGH_THRESHOLD:
             return unknown_result(best_fuzzy_score)
 
         return build_result(best_command, entities, best_fuzzy_score)
@@ -121,7 +124,8 @@ def build_result(
         "target": target,
         "params": params,
         "score": round(score, 2),
-        "confidence": confidence_label(score),
+        "confidence": round(score, 2),
+        "confidence_label": confidence_label(score),
         "status": status,
     }
 
@@ -133,6 +137,7 @@ def unknown_result(score: float = 0.0, status: str = "unknown") -> dict:
         "target": None,
         "params": {},
         "score": round(score, 2),
-        "confidence": "low",
+        "confidence": round(score, 2),
+        "confidence_label": "low",
         "status": status,
     }

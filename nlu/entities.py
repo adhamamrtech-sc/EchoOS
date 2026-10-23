@@ -178,6 +178,10 @@ def extract_entities(text: str) -> dict:
  
 def extract_params(command, entities: dict, rest: str = "") -> dict:
     """Extract parameters required by the command."""
+    if command.params:
+        # Fixed params, e.g. set_wifi -> {"state": "off"}.
+        return dict(command.params)
+
     if command.needs == "number":
         if "number" in entities:
             return {"value": entities["number"]}
@@ -208,7 +212,7 @@ def extract_params(command, entities: dict, rest: str = "") -> dict:
     if command.action == "list_files" and "folder" in entities:
         return {"folder": entities["folder"]}
  
-    if command.action == "system_info":
+    if command.action == "get_system_info":
         return {"metrics": entities.get("metrics", list(ALL_METRICS))}
  
     return {}
@@ -220,7 +224,9 @@ def resolve_target(command, entities: dict, rest: str = ""):
         if "app" in entities:
             return entities["app"]
         if rest:
-            return find_app(rest)
+            app = find_app(rest)
+            # Only known apps: "open the wifi" must not become an app name.
+            return app if app in APPS else None
         return None
  
     if command.needs == "folder":
@@ -258,7 +264,7 @@ def validate_params(command, params: dict, target=None) -> str:
  
         value = params["value"]
  
-        if command.action == "set_volume" and not (0 <= value <= 100):
+        if command.action in ("set_volume", "set_brightness") and not (0 <= value <= 100):
             return "invalid_number"
  
         return "ok"
