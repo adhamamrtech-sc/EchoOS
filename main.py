@@ -1,18 +1,20 @@
-"""Connects all the stages. Owner: Deputy Leader."""
-from audio import record
-from asr import transcribe
-from nlu import understand
-from actions import run
-from feedback import speak
+YES_WORDS = ("yes", "yeah", "yep", "sure", "ok", "okay", "confirm",
+             "نعم", "ايوه", "أيوه", "اه", "تمام", "اكيد")
 
 
 def main():
-    audio = record(5)
-    text = transcribe(audio)
+    text = transcribe(record(5))
     intent = understand(text)
     result = run(intent)
+
+    if result["status"] == "needs_confirmation":
+        speak(result["message"])
+        answer = transcribe(record(3)).lower()
+
+        if any(word in answer for word in YES_WORDS):
+            intent["params"]["confirmed"] = True
+            result = run(intent)
+        else:
+            result = {"status": "ok", "message": "Cancelled."}
+
     speak(result["message"])
-
-
-if __name__ == "__main__":
-    main()
