@@ -38,7 +38,9 @@ def is_yes(answer):
 
 
 def main():
+    print("[EchoOS] Listening... (speak now)")
     text = transcribe(record(5))
+    print(f"[heard] {text!r}")
 
     if not text:
         speak("I didn't hear anything.")
