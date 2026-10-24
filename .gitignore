@@ -10,3 +10,5 @@ models/
 *.bak
 *.zip
 model_vosk/
+.DS_Store
+__MACOSX/

@@ -48,17 +48,17 @@ change its row here and remove it from `PENDING` in `tests/test_nlu_actions.py`.
 | `confirm_wifi_off`   | implemented     | none                      | internal helper, the NLU never outputs it            |
 | `set_bluetooth`      | implemented     | `state`: `on` or `off`    | Menna. `off` needs confirmation                      |
 | `get_system_info`    | implemented     | `metrics`: cpu, ram, disk | Menna. Uses psutil, falls back to `uname -a`         |
-| `close_app`          | planned         | target = app name         | Dana                                                 |
-| `open_folder`        | planned         | target = folder           | Dana                                                 |
-| `create_file`        | planned         | `filename`                | Dana                                                 |
-| `create_folder`      | planned         | `name`                    | Dana                                                 |
-| `rename_file`        | planned         | `old`, `new`              | Dana                                                 |
-| `list_files`         | planned         | optional `folder`         | Dana                                                 |
+| `close_app`          | implemented         | target = app name         | Dana                                                 |
+| `open_folder`        | implemented         | target = folder           | Dana                                                 |
+| `create_file`        | implemented         | `filename`                | Dana                                                 |
+| `create_folder`      | implemented         | `name`                    | Dana                                                 |
+| `rename_file`        | implemented         | `old`, `new`              | Dana                                                 |
+| `list_files`         | implemented         | optional `folder`         | Dana                                                 |
 | `get_time`           | planned         | none                      | unassigned                                           |
 | `screenshot`         | planned         | none                      | unassigned                                           |
 | `show_processes`     | planned         | none                      | unassigned                                           |
 | `exit`               | planned         | none                      | handled in `main.py` later                           |
-| `delete_file`        | blocked         | `filename`                | dangerous: needs confirmation and a safety review    |
+| `delete_file`        | implemented         | `filename`                | asks first; deletes only a confirmed, unchanged file (Dana)    |
 | `shutdown`           | blocked         | none                      | dangerous: needs confirmation and a safety review    |
 | `restart`            | blocked         | none                      | dangerous: needs confirmation and a safety review    |
 

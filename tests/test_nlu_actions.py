@@ -10,11 +10,8 @@ from nlu.catalog import COMMANDS
 # Actions NLU can already output but nobody has implemented yet.
 # Remove a name from this set as soon as its handler is in ALLOWED_ACTIONS.
 PENDING = {
-    "close_app", "open_folder",                        # Dana: actions/apps_files.py
-    "create_file", "create_folder", "rename_file",
-    "delete_file", "list_files",
-    "shutdown", "restart", "exit",                     # unowned, dangerous or special
-    "get_time", "screenshot", "show_processes",
+    "shutdown", "restart", "exit",                     # dangerous or special, not reviewed yet
+    "get_time", "screenshot", "show_processes",        # unassigned
 }
 
 
