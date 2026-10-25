@@ -4,7 +4,10 @@ owner: ASR engineer
 """
 import time 
 import numpy as np 
-from jiwer import wer 
+try:
+    from jiwer import wer
+except ImportError:
+    raise SystemExit("benchmark.py needs jiwer (development only): pip install jiwer")
 import wave 
 from asr import whisper_model, get_vosk_model, transcribe
 
