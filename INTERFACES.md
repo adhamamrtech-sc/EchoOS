@@ -50,15 +50,15 @@ change its row here and remove it from `PENDING` in `tests/test_nlu_actions.py`.
 | `get_system_info`    | implemented     | `metrics`: cpu, ram, disk | Menna. Uses psutil, falls back to `uname -a`         |
 | `close_app`          | implemented         | target = app name         | Dana                                                 |
 | `open_folder`        | implemented         | target = folder           | Dana                                                 |
-| `create_file`        | implemented         | `filename`                | Dana                                                 |
-| `create_folder`      | implemented         | `name`                    | Dana                                                 |
-| `rename_file`        | implemented         | `old`, `new`              | Dana                                                 |
+| `create_file`        | implemented         | `filename`, optional `folder` | Dana                                                 |
+| `create_folder`      | implemented         | `name`, optional `folder` | Dana                                                 |
+| `rename_file`        | implemented         | `old`, `new`, optional `folder` | Dana                                                 |
 | `list_files`         | implemented         | optional `folder`         | Dana                                                 |
 | `get_time`           | planned         | none                      | unassigned                                           |
 | `screenshot`         | planned         | none                      | unassigned                                           |
 | `show_processes`     | planned         | none                      | unassigned                                           |
 | `exit`               | planned         | none                      | handled in `main.py` later                           |
-| `delete_file`        | implemented         | `filename`                | asks first; deletes only a confirmed, unchanged file (Dana)    |
+| `delete_file`        | implemented         | `filename`, optional `folder` | asks first; deletes only a confirmed, unchanged file (Dana)    |
 | `shutdown`           | blocked         | none                      | dangerous: needs confirmation and a safety review    |
 | `restart`            | blocked         | none                      | dangerous: needs confirmation and a safety review    |
 

@@ -10,7 +10,8 @@ from .normalize import normalize
 FILE_PATTERN = re.compile(
     r"(?<![\w.])"
     r"[\w\-]+\."
-    r"(?:txt|pdf|docx?|xlsx?|pptx?|csv|png|jpe?g|mp3|mp4|zip|py)"
+    r"(?:txt|pdf|docx?|xlsx?|pptx?|csv|png|jpe?g|gif|svg|mp3|mp4|wav|zip|py"
+    r"|md|json|sh|html|css|js|log|xml|ya?ml|ini|rtf|odt)"
     r"(?![\w.])",
     re.IGNORECASE,
 )
@@ -70,6 +71,32 @@ APP_NAMES = {
 }
  
  
+# "create file a.txt in downloads", "delete a.txt from downloads", "في التحميلات".
+# Only a folder that follows one of these words counts as the place to work in;
+# a bare "documents" can still be the name of a new folder.
+LOCATION_MARKERS = (
+    "in", "inside", "into", "under", "from", "on", "at",
+    "في", "داخل", "جوه", "جوا", "من",
+)
+FOLDER_BY_ALIAS = dict(FOLDER_ALIASES)
+LOCATION_PATTERN = re.compile(
+    r"(?<![\w.])(?:" + "|".join(LOCATION_MARKERS) + r")\s+"
+    r"(?:the\s+)?(?:(?:folder|مجلد|فولدر)\s+)?"
+    r"(" + "|".join(re.escape(alias) for alias, _ in FOLDER_ALIASES if alias) + r")"
+    r"(?![\w.])"
+)
+
+
+def find_location(text: str):
+    """Last "<in/from> <known folder>" phrase: (folder key, start index) or None."""
+    found = None
+
+    for match in LOCATION_PATTERN.finditer(text):
+        found = (FOLDER_BY_ALIAS[match.group(1)], match.start())
+
+    return found
+
+
 def find_names(text: str, alias_table: list[tuple[str, str]]) -> list[str]:
     """Find known names in order of appearance."""
     remaining = f" {text} "
@@ -137,6 +164,11 @@ def find_app(name: str):
  
 def clean_name(rest: str) -> str:
     """Turn the text after 'create folder' into a clean folder name."""
+    location = find_location(rest)
+
+    if location:
+        rest = rest[: location[1]]
+
     words = [word for word in rest.split() if word not in NAME_FILLERS]
     return " ".join(words).strip()
  
@@ -163,6 +195,11 @@ def extract_entities(text: str) -> dict:
         entities["filename"] = filenames[0]
         entities["filenames"] = filenames
  
+    location = find_location(text)
+
+    if location:
+        entities["folder_in"] = location[0]
+
     metrics = find_names(text, METRIC_ALIASES)
  
     if metrics:
@@ -176,8 +213,21 @@ def extract_entities(text: str) -> dict:
     return entities
  
  
+FOLDER_COMMANDS = {"create_file", "create_folder", "rename_file", "delete_file"}
+
+
 def extract_params(command, entities: dict, rest: str = "") -> dict:
     """Extract parameters required by the command."""
+    params = _extract_core_params(command, entities, rest)
+
+    if params and command.action in FOLDER_COMMANDS and "folder_in" in entities:
+        params["folder"] = entities["folder_in"]
+
+    return params
+
+
+def _extract_core_params(command, entities: dict, rest: str = "") -> dict:
+    """The parameters each command needs, without the optional folder."""
     if command.params:
         # Fixed params, e.g. set_wifi -> {"state": "off"}.
         return dict(command.params)
