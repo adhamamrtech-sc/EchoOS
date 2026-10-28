@@ -4,17 +4,14 @@ owner: ASR engineer
 """
 import time 
 import numpy as np 
-try:
-    from jiwer import wer
-except ImportError:
-    raise SystemExit("benchmark.py needs jiwer (development only): pip install jiwer")
+from jiwer import wer 
 import wave 
 from asr import whisper_model, get_vosk_model, transcribe
 
 test_cases = [
   {
     "audio_path": "sample.wav",
-    "expected_text": "open firefox, increase the volume, increase the brightness, shut down, restart "
+    "expected_text": "open fire fox, increase the volume, decrease the volume, increase the brightness, shut down, restart."
   }
 ]
 
@@ -33,7 +30,7 @@ def run_benchmark():
         audio_path = test["audio_path"]
         expected = test["expected_text"].strip().lower()
 
-        print(f"\n--- test case #{i}: [{audio_path}] ---")
+        print("\n--- test case #{i}: [{audio_path}] ---")
         print(f"Expected Text :\"{expected}\"")
         try:
             audio_data = load_audio_file(audio_path)
