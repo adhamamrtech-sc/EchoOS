@@ -1,4 +1,6 @@
+
 """End-to-end flow of main() with fake microphone, ASR and speaker."""
+
 import sys
 import types
 from pathlib import Path
@@ -16,15 +18,19 @@ def load_main(heard):
 
     fake_audio = types.ModuleType("audio")
     fake_audio.record = lambda seconds=5: [0.0]
+
     fake_asr = types.ModuleType("asr")
     fake_asr.transcribe = lambda audio: next(answers)
+
     fake_feedback = types.ModuleType("feedback")
     fake_feedback.speak = said.append
 
-    fakes = {"audio": fake_audio, "asr": fake_asr, "feedback": fake_feedback}
+    fakes = {
+        "audio": fake_audio,
+        "asr": fake_asr,
+        "feedback": fake_feedback,
+    }
 
-    # Swap only our three fakes. (patch.dict would also unload numpy and
-    # other C modules imported meanwhile, which breaks later tests.)
     saved = {name: sys.modules.get(name) for name in fakes}
     sys.modules.update(fakes)
     sys.modules.pop("main", None)
@@ -55,18 +61,37 @@ def run_flow(heard):
 
 def test_main_is_runnable_as_a_script():
     source = Path("main.py").read_text(encoding="utf-8")
+
     assert 'if __name__ == "__main__"' in source
     assert "from audio import record" in source
 
 
 @pytest.mark.parametrize("answer, expected", [
-    ("Yes.", True), ("yes, please", True), ("Yeah!", True), ("yes yes", True),
-    ("do it", True), ("Go ahead.", True), ("ok", True), ("sure, thanks", True),
-    ("ايوه", True), ("أيوه", True), ("نعم نفذ", True), ("اه من فضلك", True),
-    ("yesterday", False), ("not sure", False), ("No.", False), ("maybe", False),
-    ("I didn't say yes", False), ("I said yes yesterday", False),
-    ("yes but wait", False), ("yes, cancel it", False), ("do not do it", False),
-    ("yes turn it off", False), ("", False), (None, False), ("لا", False),
+    ("Yes.", True),
+    ("yes, please", True),
+    ("Yeah!", True),
+    ("yes yes", True),
+    ("do it", True),
+    ("Go ahead.", True),
+    ("ok", True),
+    ("sure, thanks", True),
+    ("ايوه", True),
+    ("أيوه", True),
+    ("نعم نفذ", True),
+    ("اه من فضلك", True),
+    ("yesterday", False),
+    ("not sure", False),
+    ("No.", False),
+    ("maybe", False),
+    ("I didn't say yes", False),
+    ("I said yes yesterday", False),
+    ("yes but wait", False),
+    ("yes, cancel it", False),
+    ("do not do it", False),
+    ("yes turn it off", False),
+    ("", False),
+    (None, False),
+    ("لا", False),
 ])
 def test_is_yes(answer, expected):
     loaded, _ = load_main(["x"])
@@ -75,37 +100,107 @@ def test_is_yes(answer, expected):
 
 def test_known_command_runs():
     said, sub = run_flow(["make it louder"])
-    assert sub.call_args[0][0] == ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+10%"]
+
+    assert sub.call_args[0][0] == [
+        "pactl",
+        "set-sink-volume",
+        "@DEFAULT_SINK@",
+        "+10%",
+    ]
     assert said == ["Volume increased"]
 
 
 def test_unknown_command_gets_a_clear_message():
     said, sub = run_flow(["tell me a joke about cats"])
+
     assert said == ["Sorry, I didn't understand that."]
     sub.assert_not_called()
 
 
 def test_silence_gets_a_clear_message():
     said, sub = run_flow([""])
+
     assert said == ["I didn't hear anything."]
     sub.assert_not_called()
 
 
 def test_wifi_off_runs_only_after_a_clear_yes():
     said, sub = run_flow(["turn off wifi", "Yes."])
-    assert sub.call_args[0][0] == ["nmcli", "radio", "wifi", "off"]
+
+    assert sub.call_args[0][0] == [
+        "nmcli",
+        "radio",
+        "wifi",
+        "off",
+    ]
     assert said[-1] == "Wi-Fi turned off"
 
 
 @pytest.mark.parametrize("answer", [
-    "no", "No, cancel", "yesterday", "I am not sure", "maybe", "I didn't say yes", "", "لا", "بلاش",
+    "no",
+    "No, cancel",
+    "yesterday",
+    "I am not sure",
+    "maybe",
+    "I didn't say yes",
+    "",
+    "لا",
+    "بلاش",
 ])
 def test_wifi_off_is_cancelled_without_a_clear_yes(answer):
     said, sub = run_flow(["turn off wifi", answer])
+
     sub.assert_not_called()
     assert said[-1] == "Cancelled."
 
 
 def test_bluetooth_off_also_needs_confirmation():
     said, sub = run_flow(["turn off bluetooth", "yeah"])
-    assert sub.call_args[0][0] == ["rfkill", "block", "bluetooth"]
+
+    assert sub.call_args[0][0] == [
+        "rfkill",
+        "block",
+        "bluetooth",
+    ]
+
+
+def test_nlu_cannot_fake_user_confirmation():
+    loaded, said = load_main(["turn off wifi", "no"])
+
+    fake_intent = {
+        "action": "set_wifi",
+        "target": "wifi",
+        "params": {
+            "state": "off",
+            "confirmed": True,
+        },
+    }
+
+    with mock.patch.object(
+        loaded, "understand", return_value=fake_intent
+    ):
+        with mock.patch("subprocess.run") as sub:
+            loaded.main()
+
+    sub.assert_not_called()
+    assert said[-1] == "Cancelled."
+
+
+@pytest.mark.parametrize("bad_params", [None, []])
+def test_invalid_params_are_rejected(bad_params):
+    loaded, said = load_main(["turn off wifi"])
+
+    fake_intent = {
+        "action": "set_wifi",
+        "target": "wifi",
+        "params": bad_params,
+    }
+
+    with mock.patch.object(
+        loaded, "understand", return_value=fake_intent
+    ):
+        with mock.patch("subprocess.run") as sub:
+            loaded.main()
+
+    sub.assert_not_called()
+    assert said == ["Sorry, I couldn't process that command."]

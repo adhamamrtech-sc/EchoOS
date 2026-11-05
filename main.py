@@ -1,4 +1,6 @@
+
 """Connects all the stages. Owner: Deputy Leader."""
+
 import re
 
 from audio import record
@@ -8,29 +10,31 @@ from nlu.normalize import normalize
 from actions import run
 from feedback import speak
 
-# A confirmation counts only when the WHOLE answer is a clear yes
-# (after normalize). "yesterday", "I didn't say yes", "yes but wait" and
-# anything unclear all cancel the action.
+
+# A confirmation counts only when the WHOLE answer is a clear yes.
 YES_WORDS = {
     normalize(word)
     for word in (
         "yes", "yeah", "yep", "sure", "ok", "okay", "confirm",
-        "نعم", "ايوه", "أيوه", "اه", "تمام", "اكيد", "نفذ",
+        "نعم", "أيوه", "ايوه", "أيوة", "أيوه تمام",
+        "تمام", "موافق", "أكد", "نفذ", "نفّذ",
+        "اه", "آه", "أه",
     )
 }
+
 YES_FILLERS = {
     normalize(word)
     for word in (
         "please", "thanks", "thank", "you", "do", "it", "go", "ahead",
-        "من", "فضلك", "لو", "سمحت", "ياريت",
+        "من فضلك", "لو سمحت", "يا ريت", "من", "فضلك",
     )
 }
+
 YES_PHRASES = {"do it", "go ahead", "go for it"}
 
 
 def is_yes(answer):
-    """True only for a clear yes. Anything else is a no."""
-    # \w+ drops punctuation: Whisper writes "Yes." with a full stop.
+    """Return True only for a clear affirmative answer."""
     words = re.findall(r"\w+", normalize(answer or ""))
 
     if not words:
@@ -40,13 +44,17 @@ def is_yes(answer):
         return True
 
     has_yes = any(word in YES_WORDS for word in words)
-    only_yes_words = all(word in YES_WORDS | YES_FILLERS for word in words)
+    only_yes_words = all(
+        word in YES_WORDS | YES_FILLERS
+        for word in words
+    )
 
     return has_yes and only_yes_words
 
 
 def main():
     print("[EchoOS] Listening... (speak now)")
+
     text = transcribe(record(5))
     print(f"[heard] {text!r}")
 
@@ -56,20 +64,61 @@ def main():
 
     intent = understand(text)
 
-    if intent["action"] == "unknown":
+    if not isinstance(intent, dict):
+        speak("Sorry, I couldn't process that command.")
+        return
+
+    if intent.get("action") == "unknown":
         speak("Sorry, I didn't understand that.")
         return
 
+    # Validate params before using them.
+    if "params" not in intent:
+        params = {}
+        intent["params"] = params
+
+    elif not isinstance(intent["params"], dict):
+        speak("Sorry, I couldn't process that command.")
+        return
+
+    else:
+        params = intent["params"]
+
+    # Never trust confirmation supplied by the NLU.
+    params.pop("confirmed", None)
+
     result = run(intent)
+
+    if not isinstance(result, dict):
+        speak("Sorry, something went wrong while executing the command.")
+        return
+
+    if "status" not in result or "message" not in result:
+        speak("Sorry, something went wrong while executing the command.")
+        return
 
     if result["status"] == "needs_confirmation":
         speak(result["message"])
 
-        if is_yes(transcribe(record(3))):
-            intent["params"]["confirmed"] = True
+        answer = transcribe(record(3))
+
+        if is_yes(answer):
+            params["confirmed"] = True
             result = run(intent)
+
+            if (
+                not isinstance(result, dict)
+                or "status" not in result
+                or "message" not in result
+            ):
+                speak("Sorry, something went wrong while executing the command.")
+                return
+
         else:
-            result = {"status": "ok", "message": "Cancelled."}
+            result = {
+                "status": "ok",
+                "message": "Cancelled.",
+            }
 
     speak(result["message"])
 
