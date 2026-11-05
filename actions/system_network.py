@@ -20,11 +20,9 @@ def _percent(intent):
     """Return an integer from 0 to 100, or None for invalid input."""
     value = _params(intent).get("value")
 
-    # Booleans are integers in Python, so reject them explicitly.
     if isinstance(value, bool):
         return None
 
-    # Accept integers and digit-only strings, but reject floats.
     if isinstance(value, int):
         number = value
     elif isinstance(value, str) and re.fullmatch(r"[+-]?\d+", value.strip()):
@@ -133,11 +131,8 @@ def lock_screen(intent):
 
 def get_system_info(intent):
     """Report CPU, RAM and disk usage using psutil."""
-    try:
-        import psutil
-    except ImportError:
-        return _run(["uname", "-a"], None)
 
+    # Validate requested metrics before importing optional dependencies.
     metrics = _params(intent).get("metrics")
 
     if metrics is None:
@@ -157,6 +152,11 @@ def get_system_info(intent):
             "status": "error",
             "message": "No valid metrics were requested.",
         }
+
+    try:
+        import psutil
+    except ImportError:
+        return _run(["uname", "-a"], None)
 
     parts = []
 
