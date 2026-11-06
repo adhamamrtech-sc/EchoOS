@@ -3,8 +3,7 @@
 
 import re
 
-from audio import record
-from asr import transcribe
+from audio import listen_once, strip_wake_word
 from nlu import understand
 from nlu.normalize import normalize
 from actions import run
@@ -52,16 +51,17 @@ def is_yes(answer):
     return has_yes and only_yes_words
 
 
-def main():
-    print("[EchoOS] Listening... (speak now)")
+def _valid_result(result):
+    """Check that an action returned the expected result structure."""
+    return (
+        isinstance(result, dict)
+        and "status" in result
+        and "message" in result
+    )
 
-    text = transcribe(record(5))
-    print(f"[heard] {text!r}")
 
-    if not text:
-        speak("I didn't hear anything.")
-        return
-
+def _process_command(text, listen_for_confirmation):
+    """Understand and execute one command."""
     intent = understand(text)
 
     if not isinstance(intent, dict):
@@ -89,28 +89,20 @@ def main():
 
     result = run(intent)
 
-    if not isinstance(result, dict):
-        speak("Sorry, something went wrong while executing the command.")
-        return
-
-    if "status" not in result or "message" not in result:
+    if not _valid_result(result):
         speak("Sorry, something went wrong while executing the command.")
         return
 
     if result["status"] == "needs_confirmation":
         speak(result["message"])
 
-        answer = transcribe(record(3))
+        answer = listen_for_confirmation()
 
-        if is_yes(answer):
+        if answer is not None and is_yes(answer):
             params["confirmed"] = True
             result = run(intent)
 
-            if (
-                not isinstance(result, dict)
-                or "status" not in result
-                or "message" not in result
-            ):
+            if not _valid_result(result):
                 speak("Sorry, something went wrong while executing the command.")
                 return
 
@@ -121,6 +113,80 @@ def main():
             }
 
     speak(result["message"])
+
+
+def main(max_commands=None, max_listens=None):
+    """Run EchoOS with a session activated by the 'Hi Echo' wake word.
+
+    Commands inside an active session do not need the wake word again.
+    The session ends after 30 seconds without detected speech.
+
+    max_commands and max_listens are optional limits for automated tests.
+    """
+
+    listen_count = 0
+    command_count = 0
+
+    def listen(start_timeout):
+        nonlocal listen_count
+
+        if max_listens is not None and listen_count >= max_listens:
+            return None
+
+        listen_count += 1
+
+        return listen_once(
+            require_wake_word=False,
+            start_timeout=start_timeout,
+        )
+
+    def listen_for_confirmation():
+        return listen(start_timeout=3)
+
+    print("[EchoOS] Waiting for 'Hi Echo'...")
+
+    while True:
+        # Standby: wait for the wake word.
+        text = listen(start_timeout=8)
+
+        if text is None:
+            return
+
+        if not text:
+            continue
+
+        heard_wake_word, command = strip_wake_word(text)
+
+        if not heard_wake_word:
+            continue
+
+        print("[EchoOS] Session activated.")
+
+        # Handle "Hi Echo, make it louder" immediately.
+        if command:
+            _process_command(command, listen_for_confirmation)
+            command_count += 1
+
+            if max_commands is not None and command_count >= max_commands:
+                return
+
+        # Active session: commands no longer need the wake word.
+        while True:
+            if max_commands is not None and command_count >= max_commands:
+                return
+
+            text = listen(start_timeout=30)
+
+            if text is None:
+                return
+
+            # No speech within 30 seconds: close the session.
+            if not text:
+                print("[EchoOS] Session ended. Waiting for wake word...")
+                break
+
+            _process_command(text, listen_for_confirmation)
+            command_count += 1
 
 
 if __name__ == "__main__":

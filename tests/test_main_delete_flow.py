@@ -20,9 +20,9 @@ from actions.file_app_core import config, confirmation
 
 
 def run_main(heard):
-    """Run main() once. `heard` may be a list or a generator (to act between steps)."""
+    """Run main() once with a bounded number of microphone listens."""
     loaded, said = load_main(heard)
-    loaded.main()
+    loaded.main(max_listens=10)
     return said
 
 
@@ -35,20 +35,20 @@ class DeleteThroughMainTests(BaseCase):
     def test_yes_deletes_only_the_asked_file(self):
         target = self.make(self.docs)
         other = self.make(self.docs, "notes.txt")
-        said = run_main(["Delete report.pdf.", "Yes."])
+        said = run_main(["Hi Echo", "Delete report.pdf.", "Yes."])
         self.assertFalse(target.exists())
         self.assertTrue(other.exists())
         self.assertEqual(said[-1], "Deleted report.pdf.")
 
     def test_the_question_is_spoken_before_anything_is_deleted(self):
         target = self.make(self.docs)
-        said = run_main(["delete report.pdf", "no"])
+        said = run_main(["Hi Echo", "delete report.pdf", "no"])
         self.assertEqual(said[0], "Delete report.pdf from Documents? Say yes to confirm.")
         self.assertTrue(target.exists())
 
     def test_no_keeps_the_file(self):
         target = self.make(self.docs)
-        said = run_main(["delete report.pdf", "no"])
+        said = run_main(["Hi Echo", "delete report.pdf", "no"])
         self.assertTrue(target.exists())
         self.assertEqual(said[-1], "Cancelled.")
 
@@ -56,13 +56,13 @@ class DeleteThroughMainTests(BaseCase):
         for answer in ("yesterday", "I didn't say yes", "maybe", "yes but wait", ""):
             target = self.make(self.docs)
             confirmation.clear()
-            run_main(["delete report.pdf", answer])
+            run_main(["Hi Echo", "delete report.pdf", answer])
             self.assertTrue(target.exists(), answer)
 
     def test_expired_confirmation_keeps_the_file(self):
         target = self.make(self.docs)
         with unittest_patch(config, "CONFIRMATION_TTL_SECONDS", -1.0):
-            said = run_main(["delete report.pdf", "yes"])
+            said = run_main(["Hi Echo", "delete report.pdf", "yes"])
         self.assertTrue(target.exists())
         self.assertNotIn("Deleted report.pdf.", said)
 
@@ -70,6 +70,7 @@ class DeleteThroughMainTests(BaseCase):
         target = self.make(self.docs)
 
         def heard():
+            yield "Hi Echo"
             yield "delete report.pdf"
             target.write_text("someone edited this file, so it is a different file now")
             yield "yes"
@@ -82,6 +83,7 @@ class DeleteThroughMainTests(BaseCase):
         target = self.make(self.docs, text="aaaa")
 
         def heard():
+            yield "Hi Echo"
             yield "delete report.pdf"
             target.unlink()
             target.write_text("bbbb")  # same name, same size, new file
@@ -93,14 +95,14 @@ class DeleteThroughMainTests(BaseCase):
     def test_same_name_in_two_folders_deletes_neither(self):
         a = self.make(self.docs)
         b = self.make(self.downloads)
-        said = run_main(["delete report.pdf", "yes"])
+        said = run_main(["Hi Echo", "delete report.pdf"])
         self.assertTrue(a.exists() and b.exists())
         self.assertIn("Documents and Downloads", said[-1])
 
     def test_a_folder_is_never_deleted(self):
         folder = self.docs / "report.pdf"
         folder.mkdir()
-        run_main(["delete report.pdf", "yes"])
+        run_main(["Hi Echo", "delete report.pdf", "yes"])
         self.assertTrue(folder.is_dir())
 
     def test_symlink_deletes_the_link_not_its_target(self):
@@ -108,13 +110,13 @@ class DeleteThroughMainTests(BaseCase):
         outside.write_text("keep me")
         link = self.docs / "report.pdf"
         link.symlink_to(outside)
-        run_main(["delete report.pdf", "yes"])
+        run_main(["Hi Echo", "delete report.pdf", "yes"])
         self.assertFalse(link.exists() and link.is_symlink())
         self.assertTrue(outside.exists())
 
     def test_nothing_is_deleted_when_the_file_does_not_exist(self):
         keep = self.make(self.docs, "notes.txt")
-        said = run_main(["delete report.pdf"])
+        said = run_main(["Hi Echo", "delete report.pdf"])
         self.assertTrue(keep.exists())
         self.assertIn("could not find", said[-1])
 
