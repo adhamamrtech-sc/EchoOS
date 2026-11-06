@@ -95,7 +95,7 @@ class DeleteThroughMainTests(BaseCase):
     def test_same_name_in_two_folders_deletes_neither(self):
         a = self.make(self.docs)
         b = self.make(self.downloads)
-        said = run_main(["Hi Echo", "delete report.pdf", "yes"])
+        said = run_main(["Hi Echo", "delete report.pdf"])
         self.assertTrue(a.exists() and b.exists())
         self.assertIn("Documents and Downloads", said[-1])
 
