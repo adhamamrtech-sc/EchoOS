@@ -40,7 +40,18 @@ def test_device_configuration(monkeypatch, value, expected):
 
 @pytest.mark.parametrize(
     "seconds",
-    [0, -1, -0.5, True, False, "5", None],
+    [
+        0,
+        -1,
+        -0.5,
+        True,
+        False,
+        "5",
+        None,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
 )
 def test_record_rejects_invalid_duration(seconds):
     with pytest.raises(ValueError):
@@ -192,15 +203,40 @@ def make_frame(value):
 @pytest.mark.parametrize(
     "kwargs",
     [
+        # max_seconds validation
         {"max_seconds": 0},
         {"max_seconds": -1},
+        {"max_seconds": True},
+        {"max_seconds": "15"},
+        {"max_seconds": None},
+        {"max_seconds": float("nan")},
+        {"max_seconds": float("inf")},
+        {"max_seconds": float("-inf")},
+
+        # silence_ms validation
         {"silence_ms": 0},
         {"silence_ms": -1},
+        {"silence_ms": True},
+        {"silence_ms": "800"},
+        {"silence_ms": None},
+        {"silence_ms": float("nan")},
+        {"silence_ms": float("inf")},
+
+        # start_timeout validation
         {"start_timeout": 0},
         {"start_timeout": -1},
+        {"start_timeout": True},
+        {"start_timeout": "8"},
+        {"start_timeout": None},
+        {"start_timeout": float("nan")},
+        {"start_timeout": float("inf")},
+
+        # vad_mode validation
         {"vad_mode": -1},
         {"vad_mode": 4},
         {"vad_mode": True},
+        {"vad_mode": 2.0},
+        {"vad_mode": "2"},
     ],
 )
 def test_record_until_silence_rejects_invalid_arguments(kwargs):

@@ -1,6 +1,8 @@
 
 """Microphone capture. Owner: Audio Engineer."""
 
+import math
+import numbers
 import os
 import re
 import time
@@ -18,6 +20,20 @@ _WAKE_RE = re.compile(
 )
 
 
+def _validate_positive_finite_number(value, name):
+    """Reject values that are not positive, finite real numbers."""
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise ValueError(f"{name} must be a positive finite number")
+
+    try:
+        valid = math.isfinite(value) and value > 0
+    except (OverflowError, TypeError, ValueError):
+        valid = False
+
+    if not valid:
+        raise ValueError(f"{name} must be a positive finite number")
+
+
 def _device():
     """Default microphone, or the one named in ECHOOS_MIC."""
     value = os.environ.get("ECHOOS_MIC")
@@ -30,11 +46,7 @@ def _device():
 
 def record(seconds=5):
     """Record mono audio at 16 kHz and return a 1-D float32 array."""
-    if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
-        raise ValueError("seconds must be a positive number")
-
-    if seconds <= 0:
-        raise ValueError("seconds must be greater than zero")
+    _validate_positive_finite_number(seconds, "seconds")
 
     import sounddevice as sd
 
@@ -75,17 +87,18 @@ def record_until_silence(
     Returns an empty array if no speech is detected before start_timeout.
     """
 
-    if max_seconds <= 0:
-        raise ValueError("max_seconds must be greater than zero")
+    _validate_positive_finite_number(max_seconds, "max_seconds")
+    _validate_positive_finite_number(silence_ms, "silence_ms")
+    _validate_positive_finite_number(start_timeout, "start_timeout")
 
-    if silence_ms <= 0:
-        raise ValueError("silence_ms must be greater than zero")
+    if (
+        isinstance(vad_mode, bool)
+        or not isinstance(vad_mode, numbers.Integral)
+        or vad_mode not in (0, 1, 2, 3)
+    ):
+        raise ValueError("vad_mode must be an integer between 0 and 3")
 
-    if start_timeout <= 0:
-        raise ValueError("start_timeout must be greater than zero")
-
-    if isinstance(vad_mode, bool) or vad_mode not in (0, 1, 2, 3):
-        raise ValueError("vad_mode must be between 0 and 3")
+    vad_mode = int(vad_mode)
 
     if apply_denoise is None:
         apply_denoise = os.environ.get("ECHOOS_DENOISE") == "1"
