@@ -5,3 +5,7 @@ vosk
 rapidfuzz
 psutil
 pytest
+
+google-genai>=1.0
+python-dotenv>=1.0
+sentence-transformers>=3.0
