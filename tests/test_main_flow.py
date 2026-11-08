@@ -224,12 +224,12 @@ def test_nlu_cannot_fake_user_confirmation():
     fake_intent = {
         "action": "set_wifi",
         "target": "wifi",
+        "score": 1.0,
         "params": {
             "state": "off",
             "confirmed": True,
         },
     }
-
     with mock.patch.object(
         loaded, "understand", return_value=fake_intent
     ):
@@ -247,9 +247,9 @@ def test_invalid_params_are_rejected(bad_params):
     fake_intent = {
         "action": "set_wifi",
         "target": "wifi",
+        "score": 1.0,
         "params": bad_params,
     }
-
     with mock.patch.object(
         loaded, "understand", return_value=fake_intent
     ):

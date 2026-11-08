@@ -1,128 +1,183 @@
-
-"""Connects all the stages. Owner: Deputy Leader."""
-
-import re
+"""Connects all EchoOS stages. Owner: Deputy Leader."""
 
 from audio import listen_once, strip_wake_word
 from nlu import understand
-from nlu.normalize import normalize
+from nlu.llm_engine import DecisionEngine
+from nlu.gemini_provider import GeminiProvider
+from nlu.normalize import normalize, strip_fillers
 from actions import run
 from feedback import speak
 
 
-# A confirmation counts only when the WHOLE answer is a clear yes.
-YES_WORDS = {
-    normalize(word)
-    for word in (
-        "yes", "yeah", "yep", "sure", "ok", "okay", "confirm",
-        "نعم", "أيوه", "ايوه", "أيوة", "أيوه تمام",
-        "تمام", "موافق", "أكد", "نفذ", "نفّذ",
-        "اه", "آه", "أه",
-    )
-}
+class LazyGeminiProvider:
+    """Create Gemini only when an LLM request is needed."""
 
-YES_FILLERS = {
-    normalize(word)
-    for word in (
-        "please", "thanks", "thank", "you", "do", "it", "go", "ahead",
-        "من فضلك", "لو سمحت", "يا ريت", "من", "فضلك",
-    )
-}
+    def __init__(self):
+        self._provider = None
 
-YES_PHRASES = {"do it", "go ahead", "go for it"}
+    def generate(self, prompt):
+        if self._provider is None:
+            self._provider = GeminiProvider()
+        return self._provider.generate(prompt)
 
 
 def is_yes(answer):
-    """Return True only for a clear affirmative answer."""
-    words = re.findall(r"\w+", normalize(answer or ""))
-
-    if not words:
+    """Accept only clear, standalone confirmation responses."""
+    if not isinstance(answer, str):
         return False
 
-    if " ".join(words) in YES_PHRASES:
-        return True
+    normalized = strip_fillers(normalize(answer))
 
-    has_yes = any(word in YES_WORDS for word in words)
-    only_yes_words = all(
-        word in YES_WORDS | YES_FILLERS
-        for word in words
-    )
+    accepted_answers = {
+        "yes", "yes please", "yes yes",
+        "yeah", "yep", "do it", "go ahead",
+        "ok", "sure thanks",
+        "ايوه", "نعم", "تمام", "نفذ",
+        "اه", "موافق", "ايوه تمام", "نفذها",
+    }
 
-    return has_yes and only_yes_words
-
-
-def _valid_result(result):
-    """Check that an action returned the expected result structure."""
-    return (
-        isinstance(result, dict)
-        and "status" in result
-        and "message" in result
-    )
+    return normalized in accepted_answers
 
 
-def _process_command(text, listen_for_confirmation):
-    """Understand and execute one command."""
-    intent = understand(text)
+def _run_action(action_runner, decision):
+    """Execute an action safely."""
+    try:
+        result = action_runner(decision)
 
-    if not isinstance(intent, dict):
-        speak("Sorry, I couldn't process that command.")
-        return
+    except NotImplementedError:
+        result = {
+            "status": "error",
+            "message": "Action execution is not implemented yet.",
+        }
 
-    if intent.get("action") == "unknown":
-        speak("Sorry, I didn't understand that.")
-        return
+    except Exception:
+        result = {
+            "status": "error",
+            "message": "An error occurred while executing the command.",
+        }
 
-    # Validate params before using them.
-    if "params" not in intent:
-        params = {}
-        intent["params"] = params
+    if not isinstance(result, dict):
+        return {
+            "status": "error",
+            "message": "Invalid action result.",
+        }
 
-    elif not isinstance(intent["params"], dict):
-        speak("Sorry, I couldn't process that command.")
-        return
+    return result
 
-    else:
-        params = intent["params"]
 
-    # Never trust confirmation supplied by the NLU.
-    params.pop("confirmed", None)
+def process_text(
+    text,
+    engine,
+    action_runner=run,
+    speaker=speak,
+    confirmation_listener=None,
+):
+    """Process one user utterance through the Decision Engine."""
 
-    result = run(intent)
+    candidate = understand(text)
 
-    if not _valid_result(result):
-        speak("Sorry, something went wrong while executing the command.")
-        return
+    if not isinstance(candidate, dict):
+        speaker("Sorry, I couldn't process that command.")
+        return {"status": "failed", "reason": "invalid_candidate"}
 
-    if result["status"] == "needs_confirmation":
-        speak(result["message"])
+    if "params" in candidate and not isinstance(candidate["params"], dict):
+        speaker("Sorry, I couldn't process that command.")
+        return {"status": "failed", "reason": "invalid_params"}
 
-        answer = listen_for_confirmation()
+    decision = engine.decide(candidate, text=text)
 
-        if answer is not None and is_yes(answer):
-            params["confirmed"] = True
-            result = run(intent)
+    if not isinstance(decision, dict):
+        return {
+            "status": "failed",
+            "reason": "invalid_decision",
+        }
 
-            if not _valid_result(result):
-                speak("Sorry, something went wrong while executing the command.")
-                return
+    status = decision.get("status")
 
-        else:
-            result = {
-                "status": "ok",
-                "message": "Cancelled.",
-            }
+    # Execute an accepted decision.
+    if status == "accepted":
+        if "params" in decision and not isinstance(decision["params"], dict):
+            speaker("Sorry, I couldn't process that command.")
+            return {"status": "failed", "reason": "invalid_params"}
 
-    speak(result["message"])
+        params = decision.setdefault("params", {})
+
+        # Never trust confirmation supplied by NLU or the LLM.
+        params.pop("confirmed", None)
+
+        result = _run_action(action_runner, decision)
+
+        # Handle confirmation requested by the action layer.
+        if result.get("status") == "needs_confirmation":
+            speaker(
+                result.get(
+                    "message",
+                    "Please confirm this operation.",
+                )
+            )
+
+            answer = (
+                confirmation_listener()
+                if confirmation_listener is not None
+                else None
+            )
+
+            if is_yes(answer):
+                params["confirmed"] = True
+                result = _run_action(action_runner, decision)
+
+                if result.get("status") == "needs_confirmation":
+                    result = {
+                        "status": "error",
+                        "message": "Confirmation could not be completed.",
+                    }
+
+            else:
+                result = {
+                    "status": "rejected",
+                    "reason": "user_cancelled",
+                    "message": "Cancelled.",
+                }
+
+        speaker(
+            result.get(
+                "message",
+                "Command processing finished.",
+            )
+        )
+
+        return result
+
+    # The engine handles these through its internal context manager.
+    if status in {"needs_confirmation", "needs_clarification"}:
+        speaker(
+            decision.get(
+                "message",
+                "Please repeat your request.",
+            )
+        )
+        return decision
+
+    if status == "failed" and decision.get("reason") == "llm_unavailable":
+        speaker("Sorry, I didn't understand that.")
+        return decision
+
+    if status in {"rejected", "failed"}:
+        speaker("I couldn't process your request.")
+        return decision
+
+    return {
+        "status": "failed",
+        "reason": "unknown_decision_status",
+    }
 
 
 def main(max_commands=None, max_listens=None):
-    """Run EchoOS with a session activated by the 'Hi Echo' wake word.
+    """Run EchoOS using Wake Word and Active Session."""
 
-    Commands inside an active session do not need the wake word again.
-    The session ends after 30 seconds without detected speech.
-
-    max_commands and max_listens are optional limits for automated tests.
-    """
+    engine = DecisionEngine(
+        llm_provider=LazyGeminiProvider()
+    )
 
     listen_count = 0
     command_count = 0
@@ -143,6 +198,13 @@ def main(max_commands=None, max_listens=None):
     def listen_for_confirmation():
         return listen(start_timeout=3)
 
+    def process_command(text):
+        return process_text(
+            text,
+            engine,
+            confirmation_listener=listen_for_confirmation,
+        )
+
     print("[EchoOS] Waiting for 'Hi Echo'...")
 
     while True:
@@ -162,15 +224,15 @@ def main(max_commands=None, max_listens=None):
 
         print("[EchoOS] Session activated.")
 
-        # Handle "Hi Echo, make it louder" immediately.
+        # Process the command that came with the wake word.
         if command:
-            _process_command(command, listen_for_confirmation)
+            process_command(command)
             command_count += 1
 
             if max_commands is not None and command_count >= max_commands:
                 return
 
-        # Active session: commands no longer need the wake word.
+        # Active session: commands don't need the wake word again.
         while True:
             if max_commands is not None and command_count >= max_commands:
                 return
@@ -180,12 +242,12 @@ def main(max_commands=None, max_listens=None):
             if text is None:
                 return
 
-            # No speech within 30 seconds: close the session.
+            # Silence ends the active session.
             if not text:
                 print("[EchoOS] Session ended. Waiting for wake word...")
                 break
 
-            _process_command(text, listen_for_confirmation)
+            process_command(text)
             command_count += 1
 
 
