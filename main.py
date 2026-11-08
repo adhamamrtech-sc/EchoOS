@@ -3,7 +3,6 @@
 from audio import listen_once, strip_wake_word
 from nlu import understand
 from nlu.llm_engine import DecisionEngine
-from nlu.gemini_provider import GeminiProvider
 from nlu.normalize import normalize, strip_fillers
 from actions import run
 from feedback import speak
@@ -17,6 +16,8 @@ class LazyGeminiProvider:
 
     def generate(self, prompt):
         if self._provider is None:
+            # Imported here so the app and the tests run without google-genai.
+            from nlu.gemini_provider import GeminiProvider
             self._provider = GeminiProvider()
         return self._provider.generate(prompt)
 
