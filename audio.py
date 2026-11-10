@@ -14,8 +14,8 @@ import numpy as np
 SAMPLE_RATE = 16000
 
 _WAKE_RE = re.compile(
-    r"^\W*(?:hi|hey|high|hai)[\s,]+"
-    r"(?:echo|eco|ecco|ekko|eko|ecko|equal|eiko|iko)\b[\s,.!?:;-]*",
+    r"^\W*(?:hi|hey|high|hai|hay)[\s,]+"
+    r"(?:echo|echoes|echos|eco|ecco|ekko|eko|ecko|ego|equal|eiko|iko)\b[\s,.!?:;-]*",
     re.IGNORECASE,
 )
 
