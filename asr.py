@@ -18,7 +18,7 @@ vosk_model = None
 # or as numbers. Fixing the language and listing the commands we expect
 # makes Whisper far more likely to write them correctly.
 COMMAND_HINT = (
-    "Hi Echo. Hi Echo, open Firefox. Voice commands: turn on Wi-Fi, turn off Wi-Fi, turn on Bluetooth, "
+    "Voice commands: turn on Wi-Fi, turn off Wi-Fi, turn on Bluetooth, "
     "turn off Bluetooth, make it louder, set volume to 40, set brightness to 60, "
     "open Firefox, open Chrome, lock my computer, system info, network status, yes, no."
 )
