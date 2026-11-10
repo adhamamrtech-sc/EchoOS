@@ -59,8 +59,6 @@ def normalize(text: str) -> str:
     tokens = []
 
     for token in text.split():
-        # Whisper ends sentences with ".", so "wi-fi." must become "wi-fi".
-        # Dots inside a word are kept: "report.pdf" stays a filename.
         token = token.rstrip(".")
 
         if token and token.strip("-"):

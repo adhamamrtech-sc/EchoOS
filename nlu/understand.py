@@ -13,7 +13,7 @@ from .ranking import (
     FUZZY_CONFIDENT,
     HIGH_THRESHOLD,
     MEDIUM_THRESHOLD,
-    confidence_label,    
+    confidence_label,
     rank_candidates,
 )
 from .rules import is_verb_only, match_rule
@@ -30,32 +30,36 @@ def understand(text: str) -> dict:
     normalized_text = strip_fillers(normalize(text))
 
     if not normalized_text or len(normalized_text) > 300:
-        return unknown_result()
+        return _with_text(unknown_result(), normalized_text)
 
     entities = extract_entities(normalized_text)
 
     # Never guess when multiple applications are mentioned.
     if "apps" in entities:
-        return unknown_result(status="ambiguous")
+        return _with_text(unknown_result(status="ambiguous"), normalized_text)
 
     command_match = match_rule(normalized_text, entities)
 
     if command_match:
         command, rest, score = command_match
         result = build_result(command, entities, score, rest)
-
-        if result["action"] != "unknown":
-            return result
-
-        # Intent was recognized but required parameters are missing.
-        return result
+        return _with_text(result, normalized_text)
 
     if is_verb_only(normalized_text):
-        return unknown_result(status="missing_target")
+        return _with_text(
+            unknown_result(status="missing_target"),
+            normalized_text,
+        )
 
-    return understand_with_fallback(normalized_text, entities)
+    result = understand_with_fallback(normalized_text, entities)
+    return _with_text(result, normalized_text)
 
 
+def _with_text(result: dict, text: str) -> dict:
+    """Attach normalized user text without changing the NLU result."""
+    result = dict(result)
+    result["text"] = text
+    return result
 def understand_with_fallback(text: str, entities: dict) -> dict:
     """
     Fallback pipeline:
