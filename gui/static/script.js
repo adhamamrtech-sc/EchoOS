@@ -136,7 +136,7 @@ fetchStatus();
 // ── Response Display ─────────────────────────────────────
 function showResponse(text, status) {
   const isErr = (status === "error");
-  const isWarn = (status === "needs_confirmation" || status === "unknown");
+  const isWarn = (status === "needs_confirmation" || status === "needs_clarification" || status === "unknown");
 
   if (isErr) responseText.style.color = "var(--error)";
   else if (isWarn) responseText.style.color = "var(--warn)";

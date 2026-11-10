@@ -27,13 +27,24 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 # ── Import Shared Command Processor & Audio ─────────────────────────────────
+PROCESSOR = None
+
 try:
-    from command_processor import process_command, confirm_command, is_yes
+    from command_processor import CommandProcessor
+    from main import strip_wake_word
+
+    # ECHOOS_GUI_SPEAK=1 also speaks replies on the server (espeak). Off by
+    # default because the page already reads replies aloud in the browser.
+    _speaker = None
+    if os.environ.get("ECHOOS_GUI_SPEAK") == "1":
+        from feedback import speak as _speaker
+
+    PROCESSOR = CommandProcessor(speaker=_speaker)
     CORE_AVAILABLE = True
-    print("[EchoOS GUI] ✅ Connected to EchoOS Core via command_processor.py")
+    print("[EchoOS GUI] ✅ Connected to the EchoOS pipeline (main.process_text)")
 except Exception as e:
     CORE_AVAILABLE = False
-    print(f"[EchoOS GUI] ⚠️ Failed to load command_processor: {e}")
+    print(f"[EchoOS GUI] ⚠️ Failed to load the EchoOS pipeline: {e}")
 
 try:
     from audio import listen_once
@@ -51,7 +62,26 @@ try:
 except Exception:
     pass
 
-PENDING_CONFIRMATIONS = {}
+# One microphone: only one listen at a time.
+LISTEN_LOCK = threading.Lock()
+
+# Only these Host headers are accepted. Blocks DNS-rebinding attacks, where a
+# web page makes the browser talk to this local server under another name.
+ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+
+
+def _host_name(host_header):
+    """"localhost:5050" -> "localhost", "[::1]:5050" -> "[::1]"."""
+    host = (host_header or "").strip().lower()
+    if host.startswith("["):
+        return host.split("]")[0] + "]"
+    return host.rsplit(":", 1)[0] if ":" in host else host
+
+
+@app.before_request
+def only_local_hosts():
+    if _host_name(request.host) not in ALLOWED_HOSTS:
+        return Response("Forbidden", status=403)
 
 
 def utf8_jsonify(data, status_code=200):
@@ -76,85 +106,65 @@ def status():
         "audio_available": AUDIO_AVAILABLE,
         "platform": platform.system(),
         "mode": "EchoOS Desktop App",
-        "pending_confirmations": len(PENDING_CONFIRMATIONS),
+        "pending_confirmation": bool(PROCESSOR and PROCESSOR.has_pending()),
     })
 
 
 @app.route("/command", methods=["POST"])
 def command():
     data = request.get_json(silent=True) or {}
-    text = data.get("text", "").strip()
-    session_id = data.get("session_id", "default_user")
+    text = str(data.get("text", "")).strip()
 
     if not text:
-        return utf8_jsonify({
-            "status": "error",
-            "message": "No command provided.",
-        })
+        return utf8_jsonify({"status": "error", "message": "No command provided."})
 
     if not CORE_AVAILABLE:
-        return utf8_jsonify({
-            "status": "error",
-            "message": "EchoOS Core is not available.",
-        })
+        return utf8_jsonify({"status": "error", "message": "EchoOS Core is not available."})
 
-    # Case 1: Answering a pending confirmation
-    if session_id in PENDING_CONFIRMATIONS:
-        pending_intent = PENDING_CONFIRMATIONS.pop(session_id)
-        result = confirm_command(pending_intent, text)
-        clean_result = {k: v for k, v in result.items() if not k.startswith("_")}
-        return utf8_jsonify(clean_result)
-
-    # Case 2: Fresh command
-    result = process_command(text)
-
-    # If action requires confirmation, save the pending intent
-    if result.get("status") == "needs_confirmation":
-        PENDING_CONFIRMATIONS[session_id] = result.get("_pending_intent")
-
-    clean_result = {k: v for k, v in result.items() if not k.startswith("_")}
-    return utf8_jsonify(clean_result)
+    return utf8_jsonify(PROCESSOR.handle(text))
 
 
 @app.route("/api/listen", methods=["POST"])
 def listen():
-    """Trigger native PC microphone recording via audio.py + Whisper."""
+    """Record from the microphone (audio.py + Whisper) and run what was said."""
+    if not CORE_AVAILABLE:
+        return utf8_jsonify({"status": "error", "message": "EchoOS Core is not available."})
+
     if not AUDIO_AVAILABLE:
         return utf8_jsonify({
             "status": "error",
             "message": "Native audio capture is not available on this environment.",
         })
 
+    if not LISTEN_LOCK.acquire(blocking=False):
+        return utf8_jsonify({"status": "error", "message": "Already listening."})
+
     try:
-        # Listen with relaxed VAD sensitivity (vad_mode=0) suitable for laptop mics
+        # Push-to-talk: no wake word needed, the button is the trigger.
         text = listen_once(require_wake_word=False, start_timeout=6, vad_mode=0)
+
         if not text:
             return utf8_jsonify({
                 "status": "no_speech",
-                "message": "لم أسمع أي كلام، حاول مرة أخرى.",
+                "message": "I didn't hear anything, please try again.",
             })
 
-        # Process the transcribed text through EchoOS
-        data = request.get_json(silent=True) or {}
-        session_id = data.get("session_id", "default_user")
+        # If the user said "Hi Echo, ..." anyway, drop the wake word.
+        heard_wake_word, rest = strip_wake_word(text)
+        command_text = rest if heard_wake_word and rest else text
 
-        if session_id in PENDING_CONFIRMATIONS:
-            pending_intent = PENDING_CONFIRMATIONS.pop(session_id)
-            result = confirm_command(pending_intent, text)
-        else:
-            result = process_command(text)
-            if result.get("status") == "needs_confirmation":
-                PENDING_CONFIRMATIONS[session_id] = result.get("_pending_intent")
+        result = PROCESSOR.handle(command_text)
+        result["heard_text"] = text
+        return utf8_jsonify(result)
 
-        clean_result = {k: v for k, v in result.items() if not k.startswith("_")}
-        clean_result["heard_text"] = text
-        return utf8_jsonify(clean_result)
-
-    except Exception as e:
+    except Exception:
         return utf8_jsonify({
             "status": "error",
-            "message": f"خطأ في التسجيل الصوتي: {str(e)}",
+            "message": "Recording failed. Check the microphone and try again.",
         })
+
+    finally:
+        LISTEN_LOCK.release()
 
 
 # ── Desktop Window Launcher ─────────────────────────────────────────────────
@@ -170,7 +180,7 @@ if __name__ == "__main__":
 
     if server_only:
         print(f"\n  🤖  EchoOS Server Running at: http://127.0.0.1:{port}\n")
-        app.run(debug=False, host="0.0.0.0", port=port)
+        app.run(debug=False, host="127.0.0.1", port=port)
     else:
         try:
             import webview
@@ -196,4 +206,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"\n  ⚠️  Could not start Desktop Window: {e}")
             print(f"  Fallback: Running browser server on http://localhost:{port}\n")
-            app.run(debug=False, host="0.0.0.0", port=port)
+            app.run(debug=False, host="127.0.0.1", port=port)

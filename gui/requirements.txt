@@ -1,3 +1,5 @@
+# EchoOS GUI. The core packages come from ../requirements.txt.
 flask>=3.0
-psutil>=5.9
-pywebview>=5.0
+# Optional: a native window instead of the browser tab.
+# On Ubuntu it also needs:  sudo apt install python3-gi gir1.2-webkit2-4.1
+# pywebview>=5.0

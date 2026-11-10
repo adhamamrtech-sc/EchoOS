@@ -35,6 +35,21 @@ Optional settings (set before `python main.py`):
 | `ECHOOS_WHISPER`  | `tiny`, `base`, `small`, `medium`       | `small` |
 | `ECHOOS_LANG`     | `en`, `ar`, `auto`                      | `en`    |
 
+## GUI
+
+A small window/page to type or speak commands and see the reply. It uses the
+same pipeline as the voice loop (`main.process_text`), so a command behaves the
+same in both. The bridge is `command_processor.py`; the page is in `gui/`.
+
+    source .venv/bin/activate
+    pip install -r gui/requirements.txt
+    python gui/app.py            # then open http://localhost:5050
+
+Windows: run `gui\run.bat`. The microphone button records one command (no
+wake word needed). Risky commands ask for confirmation: answer yes or no.
+The server only accepts connections from the same computer.
+Set `ECHOOS_GUI_SPEAK=1` to also speak replies from the server (espeak).
+
 ## Tests
 
     pytest -rs
