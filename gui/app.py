@@ -124,9 +124,20 @@ def command():
     return utf8_jsonify(PROCESSOR.handle(text))
 
 
+# How long to wait for the user to start talking, like main.py's loop.
+LISTEN_TIMEOUTS = {"once": 8, "standby": 8, "session": 30}
+CONFIRM_TIMEOUT = 6
+
+
 @app.route("/api/listen", methods=["POST"])
 def listen():
-    """Record from the microphone (audio.py + Whisper) and run what was said."""
+    """Record from the microphone (audio.py + Whisper) and run what was said.
+
+    mode "once"    : push-to-talk. One command, no wake word needed.
+    mode "standby" : wait for "Hi Echo". Anything else is ignored.
+    mode "session" : after the wake word. Commands need no wake word; silence
+                     ends the session. Same rules as the voice loop in main.py.
+    """
     if not CORE_AVAILABLE:
         return utf8_jsonify({"status": "error", "message": "EchoOS Core is not available."})
 
@@ -136,24 +147,45 @@ def listen():
             "message": "Native audio capture is not available on this environment.",
         })
 
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode") if data.get("mode") in LISTEN_TIMEOUTS else "once"
+
     if not LISTEN_LOCK.acquire(blocking=False):
         return utf8_jsonify({"status": "error", "message": "Already listening."})
 
     try:
-        # Push-to-talk: no wake word needed, the button is the trigger.
-        text = listen_once(require_wake_word=False, start_timeout=6, vad_mode=0)
+        waiting_for_answer = PROCESSOR.has_pending()
+        timeout = CONFIRM_TIMEOUT if waiting_for_answer else LISTEN_TIMEOUTS[mode]
+
+        # Default VAD settings, the same ones main.py uses.
+        text = listen_once(require_wake_word=False, start_timeout=timeout)
 
         if not text:
+            if waiting_for_answer:
+                PROCESSOR.cancel()
+                return utf8_jsonify({"status": "rejected", "message": "Cancelled."})
+            if mode == "standby":
+                return utf8_jsonify({"status": "standby_idle"})
+            if mode == "session":
+                return utf8_jsonify({"status": "session_end"})
             return utf8_jsonify({
                 "status": "no_speech",
                 "message": "I didn't hear anything, please try again.",
             })
 
-        # If the user said "Hi Echo, ..." anyway, drop the wake word.
         heard_wake_word, rest = strip_wake_word(text)
-        command_text = rest if heard_wake_word and rest else text
 
-        result = PROCESSOR.handle(command_text)
+        if mode == "standby" and not heard_wake_word:
+            return utf8_jsonify({"status": "standby_idle"})
+
+        if heard_wake_word and not rest:
+            return utf8_jsonify({
+                "status": "ok",
+                "message": "I'm listening.",
+                "heard_text": text,
+            })
+
+        result = PROCESSOR.handle(rest if heard_wake_word else text)
         result["heard_text"] = text
         return utf8_jsonify(result)
 

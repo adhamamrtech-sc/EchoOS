@@ -18,6 +18,7 @@ const cmdInput     = document.getElementById("cmdInput");
 const sendBtn      = document.getElementById("sendBtn");
 const modeBadge    = document.getElementById("modeBadge");
 const robotWrap    = document.getElementById("robotWrap");
+const hfToggle     = document.getElementById("hfToggle");
 
 // ── State ────────────────────────────────────────────────
 let currentState = "idle";
@@ -205,6 +206,7 @@ cmdInput.addEventListener("keydown", (e) => {
 
 // ── Orb Click (Native PC Microphone via EchoOS audio.py + Whisper) ─────────
 orbRing.addEventListener("click", async () => {
+  if (handsFree) return; // hands-free is already listening
   if (currentState !== "idle" && currentState !== "confirming") return;
 
   setState("listening");
@@ -214,7 +216,7 @@ orbRing.addEventListener("click", async () => {
     const res = await fetch("/api/listen", {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ session_id: sessionId }),
+      body: JSON.stringify({ mode: "once" }),
     });
 
     const data = await res.json();
@@ -247,11 +249,109 @@ orbRing.addEventListener("click", async () => {
   }
 });
 
+// ── Hands-free: wait for "Hi Echo", then take commands ─────────────────────
+// Same rules as the voice loop in main.py: standby until the wake word, then a
+// session where commands need no wake word, and silence ends the session.
+let handsFree = false;
+let loopRunning = false;
+
+function setHandsFree(on) {
+  handsFree = on;
+  hfToggle.classList.toggle("on", on);
+  hfToggle.textContent = on ? "Hands-free: on" : "Hands-free: off";
+  try { localStorage.setItem("echoos_hf", on ? "1" : "0"); } catch (e) {}
+  if (on) handsFreeLoop();
+  else if (currentState === "listening") setState("idle");
+}
+
+async function handsFreeLoop() {
+  if (loopRunning) return;
+  loopRunning = true;
+  let mode = "standby";
+  let errors = 0;
+
+  while (handsFree) {
+    // A typed command is running or being read aloud: wait for it.
+    if (currentState === "processing" || currentState === "speaking") {
+      await delay(300);
+      continue;
+    }
+
+    setState(mode === "session" || pendingConfirmation ? "listening" : "idle");
+
+    let data;
+    try {
+      const res = await fetch("/api/listen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify({ mode }),
+      });
+      data = await res.json();
+    } catch (err) {
+      showResponse("Connection error — is the server running?", "error");
+      await delay(2000);
+      continue;
+    }
+
+    if (!handsFree) break;
+    const status = data.status || "ok";
+
+    if (status === "standby_idle") continue;
+
+    if (status === "session_end") {
+      mode = "standby";
+      pendingConfirmation = false;
+      continue;
+    }
+
+    if (status === "error" || status === "no_speech") {
+      // Microphone problem or the mic is busy: show it, slow down, try again.
+      errors += 1;
+      showResponse(data.message || "Microphone error.", "error");
+      await delay(Math.min(5000, 1000 * errors));
+      continue;
+    }
+
+    errors = 0;
+    mode = "session";
+    if (data.heard_text) cmdInput.value = data.heard_text;
+
+    const msg = data.message || "Executed.";
+    showResponse(msg, status);
+
+    if (status === "needs_confirmation") {
+      pendingConfirmation = true;
+      setState("confirming");
+      cmdInput.placeholder = "Say or type 'yes' to confirm, or 'no' to cancel…";
+    } else {
+      pendingConfirmation = false;
+      cmdInput.placeholder = "Type a command (e.g., system info, what time is it)…";
+      setState("speaking");
+    }
+
+    // Don't listen while speaking, or the mic would hear EchoOS itself.
+    await speakText(msg);
+    if (status !== "needs_confirmation") setState("idle");
+  }
+
+  loopRunning = false;
+}
+
+hfToggle.addEventListener("click", () => setHandsFree(!handsFree));
+
 // ── Helper ───────────────────────────────────────────────
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-window.addEventListener("load", () => {
+window.addEventListener("load", async () => {
   cmdInput.focus();
+
+  // Start hands-free by default when the microphone is available.
+  let saved = null;
+  try { saved = localStorage.getItem("echoos_hf"); } catch (e) {}
+  try {
+    const st = await (await fetch("/status")).json();
+    if (st.audio_available && saved !== "0") setHandsFree(true);
+  } catch (e) {}
 });

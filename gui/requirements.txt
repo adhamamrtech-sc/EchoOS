@@ -1,5 +1,7 @@
 # EchoOS GUI. The core packages come from ../requirements.txt.
 flask>=3.0
-# Optional: a native window instead of the browser tab.
-# On Ubuntu it also needs:  sudo apt install python3-gi gir1.2-webkit2-4.1
-# pywebview>=5.0
+# Native app window (Windows uses the built-in Edge WebView2).
+pywebview>=5.0; sys_platform == "win32"
+# On Ubuntu the window also needs:  sudo apt install python3-gi gir1.2-webkit2-4.1
+# and then:                         pip install pywebview
+# Without it the GUI still works and opens in the browser.

@@ -87,6 +87,28 @@ html, body {
   border-color: rgba(245, 158, 11, 0.3);
 }
 
+/* ── Hands-free toggle ──────────────────────────────── */
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.hf-toggle {
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 5px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  background: rgba(148, 163, 184, 0.08);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  transition: all 0.3s ease;
+}
+.hf-toggle.on {
+  background: rgba(34, 211, 238, 0.12);
+  color: #22d3ee;
+  border-color: rgba(34, 211, 238, 0.4);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.2);
+}
+
 /* ── Stage ──────────────────────────────────────────── */
 .stage {
   position: fixed;
