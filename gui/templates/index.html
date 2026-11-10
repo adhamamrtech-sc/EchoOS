@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EchoOS</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── Top bar ──────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="logo-text">
+      Echo<span class="logo-accent">OS</span>
+    </div>
+    <div class="mode-badge" id="modeBadge">connecting…</div>
+  </header>
+
+  <!-- ── Main stage ───────────────────────────────────────────── -->
+  <main class="stage">
+
+    <!-- Robot mascot -->
+    <div class="robot-wrap" id="robotWrap">
+      <svg class="robot-svg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+
+        <!-- ── Antenna ─────────────────────────────── -->
+        <line x1="100" y1="6" x2="100" y2="30"
+              stroke="#818cf8" stroke-width="3" stroke-linecap="round"/>
+        <!-- antenna rings -->
+        <circle cx="100" cy="6" r="10" fill="none" stroke="#a855f7" stroke-width="1.5" opacity="0.4"/>
+        <circle cx="100" cy="6" r="5"  fill="#06b6d4" class="antenna-ball"/>
+
+        <!-- ── Helmet / Head ───────────────────────── -->
+        <!-- outer shell -->
+        <path d="M52,30 Q52,22 100,22 Q148,22 148,30
+                 L154,42 L154,118 Q154,138 100,144
+                 Q46,138 46,118 L46,42 Z"
+              fill="#141829"/>
+        <!-- rim highlight -->
+        <path d="M52,30 Q52,22 100,22 Q148,22 148,30
+                 L154,42 L154,118 Q154,138 100,144
+                 Q46,138 46,118 L46,42 Z"
+              fill="none" stroke="#6366f1" stroke-width="2"/>
+
+        <!-- ── Visor panel ─────────────────────────── -->
+        <rect x="58" y="50" width="84" height="56" rx="16" fill="#090b14"/>
+        <!-- visor top glass shine -->
+        <rect x="62" y="53" width="40" height="5" rx="2.5"
+              fill="white" opacity="0.12"/>
+
+        <!-- ── Eyes — Cyber LED bar style ─────────── -->
+        <!-- left eye bar -->
+        <rect x="64" y="68" width="30" height="11" rx="5.5" fill="#1e1b4b"/>
+        <rect x="64" y="68" width="30" height="11" rx="5.5" fill="#06b6d4" class="eye-bar"/>
+        <rect x="67" y="70.5" width="12" height="6" rx="3" fill="#67e8f9" opacity="0.95"/>
+
+        <!-- right eye bar -->
+        <rect x="106" y="68" width="30" height="11" rx="5.5" fill="#06b6d4" class="eye-bar"/>
+        <rect x="109" y="70.5" width="12" height="6" rx="3" fill="#67e8f9" opacity="0.95"/>
+
+        <!-- ── Mouth — audio equalizer bars ───────── -->
+        <rect class="eq-bar eq1" x="68"  y="98" width="7" height="14" rx="3.5" fill="#818cf8"/>
+        <rect class="eq-bar eq2" x="79"  y="93" width="7" height="19" rx="3.5" fill="#a855f7"/>
+        <rect class="eq-bar eq3" x="90"  y="90" width="7" height="22" rx="3.5" fill="#06b6d4"/>
+        <rect class="eq-bar eq4" x="101" y="92" width="7" height="20" rx="3.5" fill="#22d3ee"/>
+        <rect class="eq-bar eq5" x="112" y="95" width="7" height="17" rx="3.5" fill="#a855f7"/>
+        <rect class="eq-bar eq6" x="123" y="98" width="7" height="14" rx="3.5" fill="#818cf8"/>
+
+        <!-- ── Side vents ──────────────────────────── -->
+        <rect x="34" y="62" width="12" height="4" rx="2" fill="#4338ca"/>
+        <rect x="34" y="72" width="12" height="4" rx="2" fill="#4338ca"/>
+        <rect x="34" y="82" width="12" height="4" rx="2" fill="#4338ca"/>
+        <rect x="154" y="62" width="12" height="4" rx="2" fill="#4338ca"/>
+        <rect x="154" y="72" width="12" height="4" rx="2" fill="#4338ca"/>
+        <rect x="154" y="82" width="12" height="4" rx="2" fill="#4338ca"/>
+
+        <!-- ── Neck connector ─────────────────────── -->
+        <rect x="84" y="142" width="32" height="12" rx="6" fill="#1e1b4b"/>
+        <rect x="90" y="145" width="20" height="3"  rx="1.5" fill="#6366f1"/>
+        <rect x="90" y="150" width="20" height="3"  rx="1.5" fill="#6366f1"/>
+
+        <!-- ── Body — spherical cyber torso ───────── -->
+        <circle cx="100" cy="196" r="40" fill="#141829"/>
+        <circle cx="100" cy="196" r="40" fill="none" stroke="#6366f1" stroke-width="2"/>
+        <circle cx="100" cy="196" r="30" fill="none" stroke="#a855f7" stroke-width="1.5" opacity="0.4"/>
+
+        <!-- chest core glow -->
+        <circle class="chest-glow" cx="100" cy="196" r="16" fill="#a855f7" opacity="0.6"/>
+        <circle cx="100" cy="196" r="9"  fill="#06b6d4" opacity="0.9"/>
+        <circle cx="100" cy="196" r="4"  fill="#ffffff" opacity="0.95"/>
+
+        <!-- ── Arms ───────────────────────────────── -->
+        <circle cx="52" cy="174" r="12" fill="#141829" stroke="#6366f1" stroke-width="1.8"/>
+        <rect x="22" y="170" width="34" height="10" rx="5" fill="#1e1b4b"/>
+        <circle cx="22" cy="175" r="7" fill="#141829" stroke="#06b6d4" stroke-width="1.8"/>
+
+        <circle cx="148" cy="174" r="12" fill="#141829" stroke="#6366f1" stroke-width="1.8"/>
+        <rect x="144" y="170" width="34" height="10" rx="5" fill="#1e1b4b"/>
+        <circle cx="178" cy="175" r="7" fill="#141829" stroke="#06b6d4" stroke-width="1.8"/>
+
+        <!-- ── High-tech Bolt details ─────────────── -->
+        <circle cx="58"  cy="36" r="3" fill="#06b6d4" opacity="0.8"/>
+        <circle cx="142" cy="36" r="3" fill="#06b6d4" opacity="0.8"/>
+        <circle cx="58"  cy="136" r="3" fill="#a855f7" opacity="0.8"/>
+        <circle cx="142" cy="136" r="3" fill="#a855f7" opacity="0.8"/>
+
+      </svg>
+    </div><!-- /robot-wrap -->
+
+    <!-- Orb (mic / status indicator) -->
+    <div class="orb-ring" id="orbRing" title="Click to test voice or toggle state">
+      <div class="orb-pulse"></div>
+      <div class="orb-core" id="orbCore">
+        <!-- mic icon -->
+        <svg class="mic-icon" viewBox="0 0 24 24" fill="none"
+             stroke="white" stroke-width="2.2" stroke-linecap="round">
+          <rect x="9" y="2" width="6" height="12" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="8"  y1="22" x2="16" y2="22"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Status text -->
+    <p class="status-label" id="statusLabel">Idle — say "Hi Echo" or type below</p>
+
+    <!-- Response card -->
+    <div class="response-card" id="responseCard">
+      <p id="responseText"></p>
+    </div>
+
+  </main>
+
+  <!-- ── Input bar ─────────────────────────────────────────────── -->
+  <footer class="input-bar">
+    <input  id="cmdInput"
+            class="cmd-input"
+            type="text"
+            placeholder="Type a command (e.g., system info, what time is it)…"
+            autocomplete="off"
+            spellcheck="false" />
+    <button class="send-btn" id="sendBtn" onclick="sendCommand()" title="Send">
+      <!-- send arrow -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round">
+        <line x1="22" y1="2" x2="11" y2="13"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </footer>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
