@@ -296,7 +296,13 @@ async function handsFreeLoop() {
     if (!handsFree) break;
     const status = data.status || "ok";
 
-    if (status === "standby_idle") continue;
+    if (status === "standby_idle") {
+      // Show what was heard, so it is clear when the wake word was misheard.
+      if (data.heard_text) {
+        showResponse(`Heard: “${data.heard_text}” — say “Hi Echo” first`, "unknown");
+      }
+      continue;
+    }
 
     if (status === "session_end") {
       mode = "standby";

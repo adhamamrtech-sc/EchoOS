@@ -9,6 +9,7 @@ import sys
 import json
 import platform
 import threading
+import time
 from flask import Flask, render_template, request, Response
 
 # ── UTF-8 Terminal Safety ──────────────────────────────────────────────────
@@ -158,7 +159,13 @@ def listen():
         timeout = CONFIRM_TIMEOUT if waiting_for_answer else LISTEN_TIMEOUTS[mode]
 
         # Default VAD settings, the same ones main.py uses.
+        started = time.monotonic()
         text = listen_once(require_wake_word=False, start_timeout=timeout)
+        print(
+            f"[EchoOS GUI] {mode:<7} heard {text!r} "
+            f"({time.monotonic() - started:.1f}s incl. recording and Whisper)",
+            flush=True,
+        )
 
         if not text:
             if waiting_for_answer:
@@ -176,7 +183,8 @@ def listen():
         heard_wake_word, rest = strip_wake_word(text)
 
         if mode == "standby" and not heard_wake_word:
-            return utf8_jsonify({"status": "standby_idle"})
+            # Say what was heard so a mishearing is visible in the page.
+            return utf8_jsonify({"status": "standby_idle", "heard_text": text})
 
         if heard_wake_word and not rest:
             return utf8_jsonify({
