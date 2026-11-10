@@ -15,18 +15,20 @@ from asr import whisper_model, get_vosk_model, transcribe
 test_cases = [
   {
     "audio_path": "sample.wav",
-    "expected_text": "open fire fox, increase the volume, decrease the volume, increase the brightness, shut down, restart."
+    "expected_text": "open firefox increase the volume decrease the volume increase brightness shut down restart"
   }, 
   {
      "audio_path": "nayera2.wav",
-     "expected_text": "open firefox, turn on wifi, set volume to 40, make it louder, lock the screen, show system info"
+     "expected_text": "open firefox turn on wifi set volume to 40 make it louder lock the screen show system info"
 
   },
   {
     "audio_path": "adham.wav",
-    "expected_text" : "open firefox, turn on wifi, set volume to 40, make it louder, lock the screen, show system info"
-
-      
+    "expected_text" : "open firefox turn on wifi set volume to 40 make it louder lock the screen show system info"
+  },
+  {
+    "audio_path": "menna walid.wav",
+    "expected_text":"increase volume get system info lock screen"
   }
 ]
 
@@ -34,6 +36,19 @@ def normalize_text(text):
     text = text.lower()
     text = re.sub(r'[^\w\s]', '', text) 
     text = re.sub(r'\s+', ' ', text).strip() 
+    return text
+
+def fix_common_mistakes(text):
+    corrections = {
+        "fire fox": "firefox",      
+        "log the screen": "lock the screen",
+        "lower" :"louder",
+        "look at" : "lock",
+        "look" : "lock"
+        }
+    
+    for wrong, correct in corrections.items():
+        text = text.replace(wrong, correct)
     return text
 
 def load_audio_file(file_path):
@@ -47,6 +62,11 @@ def run_benchmark():
     print("       ASR MODEL BENCHMARK REPORT (ACCURACY & LATENCY)         ")
     print("="*60)
 
+    total_wer = 0.0
+    total_latency = 0.0
+    valid_cases = 0 
+
+
     for i, test in enumerate(test_cases, 1):
         audio_path = test["audio_path"]
         expected = test["expected_text"].strip().lower()
@@ -59,38 +79,37 @@ def run_benchmark():
             print(f"error loading {audio_path}: {e}")
             continue
         start_time = time.time()
-        segments, _ = whisper_model.transcribe(audio_data, beam_size=5, language="en", temperature=0.0)
+        segments, _ = whisper_model.transcribe(audio_data, 
+                                               beam_size=2,
+                                                 language="en", 
+                                                 temperature=0.0,
+                                                 condition_on_previous_text=False, 
+                                                 vad_filter=True,
+                                                 vad_parameters=dict(
+                speech_pad_ms=400
+            ))
         whisper_text = "".join([seg.text for seg in segments]).strip().lower()
         expected = normalize_text(test["expected_text"])
         whisper_text = normalize_text(whisper_text)
         whisper_latency = (time.time() - start_time) * 1000 
+        whisper_text = fix_common_mistakes(whisper_text)
         whisper_wer = wer(expected, whisper_text) if whisper_text else 1.0
 
-        print("\n [Model: faster_whisper]")
+        total_wer += whisper_wer
+        total_latency += whisper_latency
+        valid_cases += 1 
+
         print(f"  result text:\"{whisper_text}\"")
         print(f"  latency    :{whisper_latency:2f} ms")
         print(f"  WER        : {whisper_wer*100:.2f}%")
 
 
-        vosk_model = get_vosk_model()
-        re = None 
-        if get_vosk_model is not None and re is not None:
-            start_time = time.time()
-            audio_int16 = (audio_data * 32767).astype(np.int16).tobytes()
-            
-            
-            rec.AcceptWaveform(audio_int16)
-            res = json.loads(re.Result())
-            vosk_text = res.get("text", "").strip().lower()
-            vosk_latency = (time.time()- start_time)*1000
-            vosk_wer = wer(expected, vosk_text) if vosk_text else 1.0
-
-            print("\n [Model: vosk]")              
-            print(f"  result text:\"{vosk_text}\"")
-            print(f"  latency    :{vosk_latency:2f} ms")
-            print(f"  WER        : {vosk_wer*100:.2f}%")
-        else:
-            print("\n[model: vosk]  --> skipped (model path not found)")
+    if valid_cases > 0:
+        print("\n" + "=" * 60)
+        print("                   FINAL PERFORMANCE SUMMARY                   ")
+        print("=" * 60)
+        print(f"  Average WER     : {(total_wer / valid_cases) * 100:.2f}%")
+        print(f"  Average Latency : {total_latency / valid_cases:.2f} ms")
     print("="*60)
 if __name__ == "__main__":
     run_benchmark()

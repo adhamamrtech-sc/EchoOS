@@ -10,7 +10,7 @@ def record_test_command():
        name = "test_user"
 
     filename = f"{name}.wav"
-    print("now we're recording 10 seconds, speak now!")
+    print("we're recording 10 seconds, speak now!")
 
     audio_data = record(10)
     if audio_data is not None:
