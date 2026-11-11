@@ -8,9 +8,7 @@ import re
 import numpy as np 
 from jiwer import wer 
 import wave 
-import vosk
-import json
-from asr import whisper_model, get_vosk_model, transcribe
+from asr import whisper_model, transcribe
 
 test_cases = [
   {
@@ -29,15 +27,32 @@ test_cases = [
   {
     "audio_path": "menna walid.wav",
     "expected_text":"increase volume get system info lock screen"
+  },
+  {
+      "audio_path":"nayera4.wav",
+      "expected_text" : "افتح فايرفوكس علي الصوت وطي الاضاءه شغل موسيقى شغل فيديو"
+  },
+  {
+      "audio_path": "nayera5.wav",
+      "expected_text" :"افتح كروم اظهر نسبه البطاريه علي الصوت شغل الاّلة الحاسبة"
+      
   }
 ]
+COMMAND_HINT = (
+    "Voice commands: turn on Wi-Fi, turn off Wi-Fi, turn on Bluetooth, "
+    "turn off Bluetooth, make it louder, set volume to 40, set brightness to 60, "
+    "open Firefox, open Chrome, lock my computer, system info, network status, yes, no."
+)
+COMMAND_HINT_AR = (
+    "الأوامر الصوتية: افتح كروم، افتح الفايرفوكس، اعلي الصوت، اخفض الصوت، "
+    "اظهر نسبة البطارية، شغل الآلة الحاسبة، اغلق الحاسوب."
+)
 
 def normalize_text(text):
     text = text.lower()
     text = re.sub(r'[^\w\s]', '', text) 
     text = re.sub(r'\s+', ' ', text).strip() 
     return text
-
 def fix_common_mistakes(text):
     corrections = {
         "fire fox": "firefox",      
@@ -46,11 +61,9 @@ def fix_common_mistakes(text):
         "look at" : "lock",
         "look" : "lock"
         }
-    
     for wrong, correct in corrections.items():
         text = text.replace(wrong, correct)
     return text
-
 def load_audio_file(file_path):
     with wave.open(file_path, "rb") as wf:
         frames = wf.readframes(wf.getnframes())
@@ -66,7 +79,6 @@ def run_benchmark():
     total_latency = 0.0
     valid_cases = 0 
 
-
     for i, test in enumerate(test_cases, 1):
         audio_path = test["audio_path"]
         expected = test["expected_text"].strip().lower()
@@ -79,15 +91,20 @@ def run_benchmark():
             print(f"error loading {audio_path}: {e}")
             continue
         start_time = time.time()
+
+        resolved_lang = os.environ.get("ECHOOS_LANG", "auto")
+        whisper_lang = None if resolved_lang == "auto" else resolved_lang
+        active_prompt = active_prompt = COMMAND_HINT if resolved_lang == "en" else None
+        
         segments, _ = whisper_model.transcribe(audio_data, 
                                                beam_size=2,
-                                                 language="en", 
-                                                 temperature=0.0,
-                                                 condition_on_previous_text=False, 
-                                                 vad_filter=True,
-                                                 vad_parameters=dict(
-                speech_pad_ms=400
-            ))
+                                               language=whisper_lang, 
+                                               temperature=0.0,
+                                               initial_prompt=active_prompt,
+                                               condition_on_previous_text=False, 
+                                               vad_filter=True,
+                                               vad_parameters=dict (speech_pad_ms=400)
+                                                )
         whisper_text = "".join([seg.text for seg in segments]).strip().lower()
         expected = normalize_text(test["expected_text"])
         whisper_text = normalize_text(whisper_text)
@@ -100,10 +117,8 @@ def run_benchmark():
         valid_cases += 1 
 
         print(f"  result text:\"{whisper_text}\"")
-        print(f"  latency    :{whisper_latency:2f} ms")
+        print(f"  latency    :{whisper_latency:.2f} ms")
         print(f"  WER        : {whisper_wer*100:.2f}%")
-
-
     if valid_cases > 0:
         print("\n" + "=" * 60)
         print("                   FINAL PERFORMANCE SUMMARY                   ")
