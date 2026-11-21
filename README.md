@@ -67,6 +67,7 @@ GitHub Actions runs the lightweight test suite on pushes and pull requests. Test
 | `actions/` | Allowlisted operating-system actions and safety checks |
 | `feedback.py` | Spoken responses |
 | `tests/` | Automated tests for modules and end-to-end flows |
+| `tools/manual/` | Developer-only microphone, ASR, NLU, and recording utilities |
 | `benchmark.py` | ASR WER and latency benchmark; verify that the audio paths in its test cases exist before running |
 | `docs/` | Architecture and development guidance |
 | `INTERFACES.md` | Contracts exchanged between modules |

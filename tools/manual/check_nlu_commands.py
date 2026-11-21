@@ -1,7 +1,13 @@
+"""Manually inspect NLU outputs for a small set of Arabic and English commands.
+
+Run from the repository root:
+    python -m tools.manual.check_nlu_commands
+"""
+
 from nlu import understand
 
 
-tests = [
+TEST_COMMANDS = [
     "افتح Chrome",
     "open chrome",
     "افتح كروم",
@@ -22,13 +28,16 @@ tests = [
     "volume  100 خلي ",
     "ايد ال صوت",
     "ariana ",
-    "خلي الصوت علي 40"
-
+    "خلي الصوت علي 40",
 ]
 
 
-for text in tests:
-    print(f"\nINPUT: {text}")
-    result = understand(text)
-    print("OUTPUT:")
-    print(result)
+def main() -> None:
+    for command in TEST_COMMANDS:
+        print(f"\nINPUT: {command}")
+        print("OUTPUT:")
+        print(understand(command))
+
+
+if __name__ == "__main__":
+    main()
