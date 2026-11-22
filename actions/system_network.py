@@ -1,6 +1,7 @@
 
 """System settings and network actions. Owner: Actions Engineer 2 (Menna)."""
-
+import time
+from datetime import datetime
 import re
 import subprocess
 
@@ -69,7 +70,7 @@ def _run(command, ok_message):
             "message": "Command timed out.",
         }
 
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as error:
         return {
             "status": "error",
             "message": f"Command failed: {command[0]}",
@@ -84,6 +85,34 @@ def _run(command, ok_message):
 
 # ------------------- SYSTEM ACTIONS -------------------
 
+def get_time(intent):
+    now = datetime.now().strftime("%I:%M %P")
+    return {"status":"ok","message":f"The time is {now}"}
+def show_processes(intent):
+    try:
+        import psutil
+    except ImportError:
+        return {"status":"error","message":"required module is not installed: psutil"}
+    procs = list(psutil.process_iter(["name"]))
+    # first call primes the CPU counters,second reading is meaningful.
+    for p in procs:
+        try:
+            p.cpu_percent(None)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    time.sleep(0.5)
+    rows = []
+    for p in procs:
+        try:
+            rows.append((p.cpu_percent(None), p.info["name"] or "unknown"))
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    rows.sort(reverse=True)
+    top = rows[:5]
+    if not top:
+        return {"status":"error","message":"could not read processes."}
+    message = ", ".join(f"{name} ({cpu:.0f}%)" for cpu, name in top)
+    return {"status":"ok","message":message}
 def volume_up(intent):
     return _run(
         ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+10%"],
