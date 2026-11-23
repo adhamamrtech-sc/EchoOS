@@ -1,7 +1,12 @@
-# EchoOS GUI. The core packages come from ../requirements.txt.
-flask>=3.0
-# Native app window (Windows uses the built-in Edge WebView2).
+# EchoOS GUI server
+Flask>=3.0
+
+# Direct runtime dependencies used by the shared EchoOS core/audio path.
+# These are currently absent from the repository-root requirements.txt.
+numpy>=1.24
+sounddevice>=0.4.6
+faster-whisper>=1.0.0
+
+# Native WebView is enabled on Windows. On Ubuntu, the supported default is
+# the local browser server; see gui/README.md for the reason and launch command.
 pywebview>=5.0; sys_platform == "win32"
-# On Ubuntu the window also needs:  sudo apt install python3-gi gir1.2-webkit2-4.1
-# and then:                         pip install pywebview
-# Without it the GUI still works and opens in the browser.

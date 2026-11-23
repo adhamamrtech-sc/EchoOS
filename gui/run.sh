@@ -1,23 +1,30 @@
 #!/usr/bin/env bash
-# EchoOS GUI — Linux / Ubuntu Launcher
-set -e
-cd "$(dirname "$0")"
+# Launch the EchoOS GUI using the repository's isolated virtual environment.
+set -Eeuo pipefail
 
-# Check for EchoOS virtual environment
-if [ -f "../.venv/bin/python" ]; then
-    PYTHON="../.venv/bin/python"
-elif [ -f "../../EchoOS/.venv/bin/python" ]; then
-    PYTHON="../../EchoOS/.venv/bin/python"
-else
-    PYTHON="python3"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+PYTHON="${PROJECT_ROOT}/.venv/bin/python"
+
+if [[ ! -x "$PYTHON" ]]; then
+    printf '[EchoOS GUI] ERROR: project virtual environment not found.\n' >&2
+    printf 'Install the GUI first: bash gui/setup.sh\n' >&2
+    exit 1
 fi
 
-echo ""
-echo "  [EchoOS GUI] Verifying dependencies..."
-$PYTHON -m pip install -q -r requirements.txt
+if ! "$PYTHON" - <<'PY'
+import importlib.util
+required = ("flask", "numpy", "sounddevice", "faster_whisper")
+missing = [name for name in required if importlib.util.find_spec(name) is None]
+if missing:
+    raise SystemExit("Missing Python modules: " + ", ".join(missing))
+PY
+then
+    printf '[EchoOS GUI] ERROR: one or more GUI/audio dependencies are missing.\n' >&2
+    printf 'Repair the environment with: bash gui/setup.sh\n' >&2
+    exit 1
+fi
 
-echo ""
-echo "  [EchoOS GUI] Starting web interface..."
-echo "  Open your browser at: http://localhost:5050"
-echo ""
-$PYTHON app.py
+printf '\n[EchoOS GUI] Starting the local browser interface...\n'
+printf '[EchoOS GUI] Open http://127.0.0.1:5050 in your browser.\n\n'
+exec "$PYTHON" "${SCRIPT_DIR}/app.py" --server "$@"
