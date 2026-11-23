@@ -14,7 +14,7 @@ fi
 
 if ! "$PYTHON" - <<'PY'
 import importlib.util
-required = ("flask", "numpy", "sounddevice", "faster_whisper")
+required = ("flask", "numpy", "sounddevice", "faster_whisper", "webrtcvad")
 missing = [name for name in required if importlib.util.find_spec(name) is None]
 if missing:
     raise SystemExit("Missing Python modules: " + ", ".join(missing))

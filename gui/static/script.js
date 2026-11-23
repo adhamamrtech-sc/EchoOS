@@ -1,32 +1,28 @@
-/* ══════════════════════════════════════════════════════
-   EchoOS GUI — Client Script (Step 2 Standalone & Core)
-   Features:
-   - Spoken feedback (TTS via Web Speech Synthesis)
-   - Two-way Confirmation Lifecycle (needs_confirmation)
-   - Visual robot animation matching actual speech length
-   - Session tracking
-   ══════════════════════════════════════════════════════ */
-
+/* EchoOS GUI client: safe command submission, voice control and feedback. */
 "use strict";
 
-// ── DOM Elements ─────────────────────────────────────────
-const orbRing      = document.getElementById("orbRing");
-const statusLabel  = document.getElementById("statusLabel");
+const orbRing = document.getElementById("orbRing");
+const statusLabel = document.getElementById("statusLabel");
 const responseCard = document.getElementById("responseCard");
 const responseText = document.getElementById("responseText");
-const cmdInput     = document.getElementById("cmdInput");
-const sendBtn      = document.getElementById("sendBtn");
-const modeBadge    = document.getElementById("modeBadge");
-const robotWrap    = document.getElementById("robotWrap");
-const hfToggle     = document.getElementById("hfToggle");
+const cmdInput = document.getElementById("cmdInput");
+const sendBtn = document.getElementById("sendBtn");
+const modeBadge = document.getElementById("modeBadge");
+const audioBadge = document.getElementById("audioBadge");
+const robotWrap = document.getElementById("robotWrap");
+const hfToggle = document.getElementById("hfToggle");
 
-// ── State ────────────────────────────────────────────────
 let currentState = "idle";
-let sessionId    = "user_" + Math.random().toString(36).substring(2, 9);
+let sessionId = "user_" + Math.random().toString(36).slice(2, 9);
 let pendingConfirmation = false;
-let blinkTimer   = null;
+let audioAvailable = false;
+let commandInFlight = false;
+let listenInFlight = null;
+let handsFree = false;
+let loopRunning = false;
+let resumeHandsFreeAfterConfirmation = false;
+let activeSpeechFinish = null;
 
-// ── States Definition ────────────────────────────────────
 const STATES = {
   idle: {
     orb: "",
@@ -45,104 +41,168 @@ const STATES = {
   },
   speaking: {
     orb: "speaking",
-    label: "EchoOS Speaking…",
+    label: "EchoOS speaking…",
     color: "var(--accent2)"
   },
   confirming: {
     orb: "processing",
-    label: "Confirmation required (Say 'Yes' or 'No')",
+    label: "Confirmation required — say or type Yes / No",
     color: "var(--warn)"
   }
 };
 
 function setState(name) {
   currentState = name;
-  const s = STATES[name] || STATES.idle;
-
-  orbRing.className = "orb-ring" + (s.orb ? ` ${s.orb}` : "");
-  statusLabel.textContent = s.label;
-  statusLabel.style.color = s.color;
-
-  if (name === "speaking") {
-    robotWrap.classList.add("talking");
-  } else {
-    robotWrap.classList.remove("talking");
-  }
+  const state = STATES[name] || STATES.idle;
+  orbRing.className = "orb-ring" + (state.orb ? ` ${state.orb}` : "");
+  statusLabel.textContent = state.label;
+  statusLabel.style.color = state.color;
+  robotWrap.classList.toggle("talking", name === "speaking");
 }
 
-// ── Robot Eye Blink ──────────────────────────────────────
 function scheduleBlink() {
-  const delay = 2500 + Math.random() * 4000;
-  blinkTimer = setTimeout(() => {
+  const delayMs = 2500 + Math.random() * 4000;
+  window.setTimeout(() => {
     const svg = document.querySelector(".robot-svg");
     if (svg) {
       svg.classList.add("blink");
-      setTimeout(() => svg.classList.remove("blink"), 180);
+      window.setTimeout(() => svg.classList.remove("blink"), 180);
     }
     scheduleBlink();
-  }, delay);
+  }, delayMs);
 }
 scheduleBlink();
 
-// ── Spoken Feedback (TTS) ────────────────────────────────
 function speakText(text) {
-  if (!("speechSynthesis" in window)) return Promise.resolve();
+  if (!("speechSynthesis" in window) ||
+      typeof SpeechSynthesisUtterance === "undefined") {
+    return Promise.resolve();
+  }
+
+  const cleanText = String(text || "")
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, "")
+    .trim();
+  if (!cleanText) return Promise.resolve();
+
+  if (activeSpeechFinish) activeSpeechFinish(true);
 
   return new Promise((resolve) => {
-    // Strip emojis for clean TTS pronunciation
-    const cleanText = text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, "").trim();
-    if (!cleanText) {
-      resolve();
-      return;
-    }
-
-    window.speechSynthesis.cancel(); // Stop any pending speech
     const utterance = new SpeechSynthesisUtterance(cleanText);
-
-    // Auto-detect Arabic vs English
     const isArabic = /[\u0600-\u06FF]/.test(cleanText);
     utterance.lang = isArabic ? "ar-SA" : "en-US";
     utterance.rate = 1.0;
     utterance.pitch = 1.05;
 
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
+    let settled = false;
+    let timeoutId = null;
 
-    // Failsafe timeout in case onend never triggers
-    setTimeout(resolve, Math.min(10000, cleanText.length * 90 + 1500));
+    function finish(cancelSpeech = false) {
+      if (settled) return;
+      settled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (activeSpeechFinish === finish) activeSpeechFinish = null;
+      if (cancelSpeech) window.speechSynthesis.cancel();
+      resolve();
+    }
 
-    window.speechSynthesis.speak(utterance);
+    activeSpeechFinish = finish;
+    utterance.onend = () => finish(false);
+    utterance.onerror = () => finish(false);
+
+    const timeoutMs = Math.max(15000, Math.min(60000, cleanText.length * 140 + 5000));
+    timeoutId = window.setTimeout(() => finish(true), timeoutMs);
+
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      finish(true);
+    }
   });
 }
 
-// ── Fetch Server Status ──────────────────────────────────
+async function requestJSON(url, options) {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (error) {
+    throw new Error("Cannot reach the EchoOS server. Check that it is running.");
+  }
+
+  const body = await response.text();
+  let data;
+  try {
+    data = body ? JSON.parse(body) : {};
+  } catch (error) {
+    throw new Error(`The server returned an invalid response (HTTP ${response.status}).`);
+  }
+  if (!response.ok) {
+    throw new Error(data.message || `Request failed (HTTP ${response.status}).`);
+  }
+  return data;
+}
+
+function requestListen(mode) {
+  const request = requestJSON("/api/listen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ mode })
+  });
+  let tracked;
+  tracked = request.finally(() => {
+    if (listenInFlight === tracked) listenInFlight = null;
+  });
+  listenInFlight = tracked;
+  return tracked;
+}
+
 async function fetchStatus() {
   try {
-    const r = await fetch("/status");
-    const d = await r.json();
-    if (d.echoos_available) {
-      modeBadge.textContent = "EchoOS Core";
-      modeBadge.className = "mode-badge connected";
-    } else {
-      modeBadge.textContent = `Mock — ${d.platform}`;
-      modeBadge.className = "mode-badge mock";
+    const data = await requestJSON("/status");
+    modeBadge.textContent = data.echoos_available ? "Core: online" : "Core: unavailable";
+    modeBadge.className = data.echoos_available
+      ? "mode-badge connected"
+      : "mode-badge offline";
+
+    audioAvailable = Boolean(data.audio_available);
+    audioBadge.textContent = audioAvailable ? "Audio: ready" : "Audio: unavailable";
+    audioBadge.className = audioAvailable
+      ? "audio-badge ready"
+      : "audio-badge unavailable";
+    hfToggle.disabled = !audioAvailable;
+    orbRing.classList.toggle("disabled", !audioAvailable);
+    orbRing.setAttribute("aria-disabled", String(!audioAvailable));
+
+    if (!audioAvailable && handsFree) setHandsFree(false, false);
+
+    if (typeof data.pending_confirmation === "boolean") {
+      pendingConfirmation = data.pending_confirmation;
+      if (!pendingConfirmation && currentState === "confirming") {
+        setState("idle");
+        cmdInput.placeholder = "Type a command (e.g., system info, what time is it)…";
+      }
     }
-  } catch {
-    modeBadge.textContent = "Offline";
-    modeBadge.className = "mode-badge";
+    return data;
+  } catch (error) {
+    modeBadge.textContent = "Core: offline";
+    modeBadge.className = "mode-badge offline";
+    audioAvailable = false;
+    audioBadge.textContent = "Audio: unavailable";
+    audioBadge.className = "audio-badge unavailable";
+    hfToggle.disabled = true;
+    orbRing.classList.add("disabled");
+    orbRing.setAttribute("aria-disabled", "true");
+    if (handsFree) setHandsFree(false, false);
+    return null;
   }
 }
 fetchStatus();
 
-// ── Response Display ─────────────────────────────────────
 function showResponse(text, status) {
-  const isErr = (status === "error");
-  const isWarn = (status === "needs_confirmation" || status === "needs_clarification" || status === "unknown");
-
-  if (isErr) responseText.style.color = "var(--error)";
-  else if (isWarn) responseText.style.color = "var(--warn)";
-  else responseText.style.color = "var(--text)";
-
+  const isError = status === "error";
+  const isWarning = ["needs_confirmation", "needs_clarification", "unknown"].includes(status);
+  responseText.style.color = isError
+    ? "var(--error)"
+    : (isWarning ? "var(--warn)" : "var(--text)");
   responseText.textContent = text;
   responseCard.classList.add("visible");
 }
@@ -151,213 +211,246 @@ function hideResponse() {
   responseCard.classList.remove("visible");
 }
 
-// ── Send Command ─────────────────────────────────────────
+function showCommandResult(data) {
+  const message = data.message || "Executed.";
+  const displayText = data.heard_text
+    ? `Heard: “${data.heard_text}”\n${message}`
+    : message;
+  showResponse(displayText, data.status || "ok");
+}
+
 async function sendCommand() {
+  if (commandInFlight || sendBtn.disabled) return;
   const text = cmdInput.value.trim();
   if (!text) return;
 
-  cmdInput.value = "";
+  commandInFlight = true;
   sendBtn.disabled = true;
-  hideResponse();
 
+  const wasHandsFree = handsFree;
+  if (wasHandsFree) {
+    resumeHandsFreeAfterConfirmation = true;
+    setHandsFree(false, false);
+  }
+
+  cmdInput.value = "";
+  hideResponse();
   setState("processing");
 
   try {
-    const res = await fetch("/command", {
+    const data = await requestJSON("/command", {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ text, session_id: sessionId }),
+      body: JSON.stringify({ text, session_id: sessionId })
     });
 
-    const data = await res.json();
-    const msg = data.message || "Executed.";
+    const message = data.message || "Executed.";
     const status = data.status || "ok";
-
-    showResponse(msg, status);
+    showResponse(message, status);
 
     if (status === "needs_confirmation") {
       pendingConfirmation = true;
       setState("confirming");
       cmdInput.placeholder = "Type 'yes' to confirm or 'no' to cancel…";
-      await speakText(msg);
+      await speakText(message);
     } else {
       pendingConfirmation = false;
+      const resume = resumeHandsFreeAfterConfirmation || wasHandsFree;
+      resumeHandsFreeAfterConfirmation = false;
       cmdInput.placeholder = "Type a command (e.g., system info, what time is it)…";
       setState("speaking");
-      await speakText(msg);
+      await speakText(message);
       setState("idle");
+      if (resume && audioAvailable) setHandsFree(true, false);
     }
-
-  } catch (err) {
-    setState("speaking");
-    showResponse("Connection error — is the server running?", "error");
-    await delay(1500);
+  } catch (error) {
+    showResponse(error.message || "Command request failed.", "error");
     setState("idle");
+    const resume = resumeHandsFreeAfterConfirmation || wasHandsFree;
+    resumeHandsFreeAfterConfirmation = false;
+    if (resume && audioAvailable) setHandsFree(true, false);
+  } finally {
+    commandInFlight = false;
+    sendBtn.disabled = false;
+    cmdInput.focus();
   }
-
-  sendBtn.disabled = false;
-  cmdInput.focus();
 }
 
-// ── Keyboard Enter ───────────────────────────────────────
-cmdInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") sendCommand();
+cmdInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (!commandInFlight && !sendBtn.disabled) sendCommand();
+  }
 });
 
-// ── Orb Click (Native PC Microphone via EchoOS audio.py + Whisper) ─────────
 orbRing.addEventListener("click", async () => {
-  if (handsFree) return; // hands-free is already listening
+  if (handsFree || !audioAvailable || listenInFlight) return;
   if (currentState !== "idle" && currentState !== "confirming") return;
 
   setState("listening");
   hideResponse();
 
   try {
-    const res = await fetch("/api/listen", {
-      method: "POST",
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ mode: "once" }),
-    });
-
-    const data = await res.json();
-    const msg = data.message || "Executed.";
-    const status = data.status || "ok";
-
-    // If text was recognized, display it in the input briefly
-    if (data.heard_text) {
-      cmdInput.value = data.heard_text;
+    const data = await requestListen("once");
+    if (data.status === "listen_cancelled" ||
+        data.status === "confirmation_resolved") {
+      setState(pendingConfirmation ? "confirming" : "idle");
+      return;
+    }
+    if (data.status === "confirmation_waiting") {
+      pendingConfirmation = true;
+      setState("confirming");
+      showResponse("Still waiting for confirmation. Say or type Yes / No.", "needs_confirmation");
+      return;
     }
 
-    showResponse(msg, status);
-
+    showCommandResult(data);
+    const status = data.status || "ok";
     if (status === "needs_confirmation") {
       pendingConfirmation = true;
       setState("confirming");
-      cmdInput.placeholder = "Type 'yes' to confirm or 'no' to cancel…";
-      await speakText(msg);
+      cmdInput.placeholder = "Type 'yes' or 'no', or use the microphone to answer…";
+      await speakText(data.message || "Please confirm.");
     } else {
       pendingConfirmation = false;
-      cmdInput.placeholder = "Type a command (e.g., system info, what time is it)…";
+      const resume = resumeHandsFreeAfterConfirmation;
+      resumeHandsFreeAfterConfirmation = false;
       setState("speaking");
-      await speakText(msg);
+      await speakText(data.message || "Done.");
       setState("idle");
+      if (resume && audioAvailable) setHandsFree(true, false);
     }
-
-  } catch (err) {
-    setState("idle");
-    showResponse("تعذر تشغيل الميكروفون أو حدث خطأ في الاتصال.", "error");
+  } catch (error) {
+    setState(pendingConfirmation ? "confirming" : "idle");
+    showResponse(error.message || "Microphone request failed.", "error");
   }
 });
 
-// ── Hands-free: wait for "Hi Echo", then take commands ─────────────────────
-// Same rules as the voice loop in main.py: standby until the wake word, then a
-// session where commands need no wake word, and silence ends the session.
-let handsFree = false;
-let loopRunning = false;
+function setHandsFree(on, persist = true) {
+  if (on && !audioAvailable) {
+    showResponse("Native microphone audio is unavailable.", "error");
+    on = false;
+  }
 
-function setHandsFree(on) {
-  handsFree = on;
-  hfToggle.classList.toggle("on", on);
-  hfToggle.textContent = on ? "Hands-free: on" : "Hands-free: off";
-  try { localStorage.setItem("echoos_hf", on ? "1" : "0"); } catch (e) {}
-  if (on) handsFreeLoop();
-  else if (currentState === "listening") setState("idle");
+  handsFree = Boolean(on);
+  hfToggle.classList.toggle("on", handsFree);
+  hfToggle.textContent = handsFree ? "Hands-free: on" : "Hands-free: off";
+  hfToggle.disabled = !audioAvailable;
+
+  if (persist) {
+    try {
+      localStorage.setItem("echoos_hf", handsFree ? "1" : "0");
+    } catch (error) {
+      // Browser storage may be disabled.
+    }
+  }
+
+  if (handsFree) {
+    handsFreeLoop();
+  } else if (currentState === "listening") {
+    setState(pendingConfirmation ? "confirming" : "idle");
+  }
 }
 
 async function handsFreeLoop() {
-  if (loopRunning) return;
+  if (loopRunning || !audioAvailable) return;
   loopRunning = true;
   let mode = "standby";
   let errors = 0;
 
-  while (handsFree) {
-    // A typed command is running or being read aloud: wait for it.
-    if (currentState === "processing" || currentState === "speaking") {
-      await delay(300);
-      continue;
-    }
-
-    setState(mode === "session" || pendingConfirmation ? "listening" : "idle");
-
-    let data;
-    try {
-      const res = await fetch("/api/listen", {
-        method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify({ mode }),
-      });
-      data = await res.json();
-    } catch (err) {
-      showResponse("Connection error — is the server running?", "error");
-      await delay(2000);
-      continue;
-    }
-
-    if (!handsFree) break;
-    const status = data.status || "ok";
-
-    if (status === "standby_idle") {
-      // Show what was heard, so it is clear when the wake word was misheard.
-      if (data.heard_text) {
-        showResponse(`Heard: “${data.heard_text}” — say “Hi Echo” first`, "unknown");
+  try {
+    while (handsFree) {
+      if (commandInFlight || currentState === "processing" || currentState === "speaking") {
+        await delay(250);
+        continue;
       }
-      continue;
+
+      setState(mode === "session" || pendingConfirmation ? "listening" : "idle");
+
+      let data;
+      try {
+        data = await requestListen(mode);
+      } catch (error) {
+        if (!handsFree) break;
+        errors += 1;
+        showResponse(error.message || "Microphone request failed.", "error");
+        await delay(Math.min(5000, 1000 * errors));
+        continue;
+      }
+
+      if (!handsFree) break;
+      const status = data.status || "ok";
+
+      if (status === "listen_cancelled") continue;
+      if (status === "confirmation_resolved") {
+        pendingConfirmation = false;
+        mode = "standby";
+        continue;
+      }
+      if (status === "confirmation_waiting") {
+        pendingConfirmation = true;
+        setState("confirming");
+        await delay(250);
+        continue;
+      }
+      if (status === "standby_idle") {
+        if (data.heard_text) {
+          showResponse(`Heard: “${data.heard_text}” — say “Hi Echo” first`, "unknown");
+        }
+        continue;
+      }
+      if (status === "session_end") {
+        mode = "standby";
+        pendingConfirmation = false;
+        continue;
+      }
+      if (status === "error" || status === "no_speech") {
+        errors += 1;
+        showResponse(data.message || "Microphone error.", "error");
+        await delay(Math.min(5000, 1000 * errors));
+        continue;
+      }
+
+      errors = 0;
+      mode = "session";
+      showCommandResult(data);
+
+      if (status === "needs_confirmation") {
+        pendingConfirmation = true;
+        setState("confirming");
+        cmdInput.placeholder = "Say or type 'yes' to confirm, or 'no' to cancel…";
+        await speakText(data.message || "Please confirm.");
+      } else {
+        pendingConfirmation = false;
+        cmdInput.placeholder = "Type a command (e.g., system info, what time is it)…";
+        setState("speaking");
+        await speakText(data.message || "Done.");
+        setState("idle");
+      }
     }
-
-    if (status === "session_end") {
-      mode = "standby";
-      pendingConfirmation = false;
-      continue;
-    }
-
-    if (status === "error" || status === "no_speech") {
-      // Microphone problem or the mic is busy: show it, slow down, try again.
-      errors += 1;
-      showResponse(data.message || "Microphone error.", "error");
-      await delay(Math.min(5000, 1000 * errors));
-      continue;
-    }
-
-    errors = 0;
-    mode = "session";
-    if (data.heard_text) cmdInput.value = data.heard_text;
-
-    const msg = data.message || "Executed.";
-    showResponse(msg, status);
-
-    if (status === "needs_confirmation") {
-      pendingConfirmation = true;
-      setState("confirming");
-      cmdInput.placeholder = "Say or type 'yes' to confirm, or 'no' to cancel…";
-    } else {
-      pendingConfirmation = false;
-      cmdInput.placeholder = "Type a command (e.g., system info, what time is it)…";
-      setState("speaking");
-    }
-
-    // Don't listen while speaking, or the mic would hear EchoOS itself.
-    await speakText(msg);
-    if (status !== "needs_confirmation") setState("idle");
+  } finally {
+    loopRunning = false;
   }
-
-  loopRunning = false;
 }
 
 hfToggle.addEventListener("click", () => setHandsFree(!handsFree));
 
-// ── Helper ───────────────────────────────────────────────
 function delay(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+  return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
 window.addEventListener("load", async () => {
   cmdInput.focus();
-
-  // Start hands-free by default when the microphone is available.
-  let saved = null;
-  try { saved = localStorage.getItem("echoos_hf"); } catch (e) {}
+  let savedHandsFree = null;
   try {
-    const st = await (await fetch("/status")).json();
-    if (st.audio_available && saved !== "0") setHandsFree(true);
-  } catch (e) {}
+    savedHandsFree = localStorage.getItem("echoos_hf");
+  } catch (error) {
+    // Ignore unavailable localStorage.
+  }
+
+  const data = await fetchStatus();
+  if (data && data.audio_available && savedHandsFree !== "0") {
+    setHandsFree(true, false);
+  }
+  window.setInterval(fetchStatus, 10000);
 });

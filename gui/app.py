@@ -1,81 +1,80 @@
 """
-EchoOS Desktop GUI Application
-Runs as a native desktop window on Windows (WebView2) and Ubuntu (WebKitGTK).
-Uses pywebview with local Flask server and EchoOS Core (command_processor.py).
-"""
+EchoOS GUI bridge.
 
-import os
-import sys
+Ubuntu/WSL use the local browser interface. Windows may use pywebview,
+with a browser-server fallback if the native window cannot start.
+"""
 import json
+import logging
+import os
 import platform
+import sys
 import threading
 import time
-from flask import Flask, render_template, request, Response
 
-# ── UTF-8 Terminal Safety ──────────────────────────────────────────────────
+from flask import Flask, Response, render_template, request
+
 if sys.platform == "win32":
-    try:
-        if sys.stdout.encoding.lower() != "utf-8":
-            sys.stdout.reconfigure(encoding="utf-8")
-        if sys.stderr.encoding.lower() != "utf-8":
-            sys.stderr.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream.encoding and stream.encoding.lower() != "utf-8":
+                stream.reconfigure(encoding="utf-8")
+        except (AttributeError, OSError, ValueError):
+            pass
 
-# ── Add EchoOS Root to sys.path ─────────────────────────────────────────────
+logging.basicConfig(
+    level=os.environ.get("ECHOOS_GUI_LOG_LEVEL", "INFO").upper(),
+    format="[EchoOS GUI] %(levelname)s: %(message)s",
+)
+logger = logging.getLogger("echoos.gui")
+
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-# ── Import Shared Command Processor & Audio ─────────────────────────────────
 PROCESSOR = None
+PROCESSOR_LOCK = threading.RLock()
+LISTEN_LOCK = threading.Lock()
+LISTEN_CANCEL = threading.Event()
 
 try:
     from command_processor import CommandProcessor
     from main import strip_wake_word
 
-    # ECHOOS_GUI_SPEAK=1 also speaks replies on the server (espeak). Off by
-    # default because the page already reads replies aloud in the browser.
     _speaker = None
     if os.environ.get("ECHOOS_GUI_SPEAK") == "1":
         from feedback import speak as _speaker
 
     PROCESSOR = CommandProcessor(speaker=_speaker)
     CORE_AVAILABLE = True
-    print("[EchoOS GUI] ✅ Connected to the EchoOS pipeline (main.process_text)")
-except Exception as e:
+    logger.info("Connected to EchoOS pipeline (main.process_text)")
+except Exception:
     CORE_AVAILABLE = False
-    print(f"[EchoOS GUI] ⚠️ Failed to load the EchoOS pipeline: {e}")
+    logger.exception("Could not load EchoOS command pipeline")
 
 try:
     from audio import listen_once
     AUDIO_AVAILABLE = True
-    print("[EchoOS GUI] ✅ Connected to EchoOS Native Audio (Whisper & VAD)")
-except Exception as e:
+    logger.info("Connected to EchoOS native audio (Whisper and VAD)")
+except Exception:
     AUDIO_AVAILABLE = False
-    print(f"[EchoOS GUI] ⚠️ Audio module notice: {e}")
+    logger.exception("Native audio is unavailable")
 
-# ── Flask Application Setup ─────────────────────────────────────────────────
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
 try:
     app.json.ensure_ascii = False
-except Exception:
+except AttributeError:
     pass
 
-# One microphone: only one listen at a time.
-LISTEN_LOCK = threading.Lock()
-
-# Only these Host headers are accepted. Blocks DNS-rebinding attacks, where a
-# web page makes the browser talk to this local server under another name.
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
 
 def _host_name(host_header):
-    """"localhost:5050" -> "localhost", "[::1]:5050" -> "[::1]"."""
+    """Extract a hostname, preserving bracketed IPv6 addresses."""
     host = (host_header or "").strip().lower()
     if host.startswith("["):
-        return host.split("]")[0] + "]"
+        return host.split("]", 1)[0] + "]"
     return host.rsplit(":", 1)[0] if ":" in host else host
 
 
@@ -86,7 +85,6 @@ def only_local_hosts():
 
 
 def utf8_jsonify(data, status_code=200):
-    """Return JSON response with explicit UTF-8 charset."""
     return Response(
         json.dumps(data, ensure_ascii=False),
         status=status_code,
@@ -94,7 +92,6 @@ def utf8_jsonify(data, status_code=200):
     )
 
 
-# ── Routes ──────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -102,148 +99,196 @@ def index():
 
 @app.route("/status")
 def status():
+    with PROCESSOR_LOCK:
+        pending = bool(PROCESSOR and PROCESSOR.has_pending())
     return utf8_jsonify({
         "echoos_available": CORE_AVAILABLE,
         "audio_available": AUDIO_AVAILABLE,
         "platform": platform.system(),
-        "mode": "EchoOS Desktop App",
-        "pending_confirmation": bool(PROCESSOR and PROCESSOR.has_pending()),
+        "mode": "EchoOS GUI",
+        "pending_confirmation": pending,
     })
 
 
 @app.route("/command", methods=["POST"])
 def command():
-    data = request.get_json(silent=True) or {}
-    text = str(data.get("text", "")).strip()
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    command_text = str(data.get("text", "")).strip()
 
-    if not text:
+    if not command_text:
         return utf8_jsonify({"status": "error", "message": "No command provided."})
-
     if not CORE_AVAILABLE:
-        return utf8_jsonify({"status": "error", "message": "EchoOS Core is not available."})
+        return utf8_jsonify({"status": "error", "message": "EchoOS Core is unavailable."})
 
-    return utf8_jsonify(PROCESSOR.handle(text))
+    # Typed commands have priority over an in-progress microphone recording.
+    if LISTEN_LOCK.locked():
+        LISTEN_CANCEL.set()
+
+    with PROCESSOR_LOCK:
+        return utf8_jsonify(PROCESSOR.handle(command_text))
 
 
-# How long to wait for the user to start talking, like main.py's loop.
 LISTEN_TIMEOUTS = {"once": 8, "standby": 8, "session": 30}
 CONFIRM_TIMEOUT = 6
 
 
 @app.route("/api/listen", methods=["POST"])
 def listen():
-    """Record from the microphone (audio.py + Whisper) and run what was said.
-
-    mode "once"    : push-to-talk. One command, no wake word needed.
-    mode "standby" : wait for "Hi Echo". Anything else is ignored.
-    mode "session" : after the wake word. Commands need no wake word; silence
-                     ends the session. Same rules as the voice loop in main.py.
-    """
+    """Capture one voice request; pending confirmations accept direct yes/no."""
     if not CORE_AVAILABLE:
-        return utf8_jsonify({"status": "error", "message": "EchoOS Core is not available."})
-
+        return utf8_jsonify({"status": "error", "message": "EchoOS Core is unavailable."})
     if not AUDIO_AVAILABLE:
         return utf8_jsonify({
             "status": "error",
-            "message": "Native audio capture is not available on this environment.",
+            "message": "Native microphone audio is unavailable.",
         })
 
-    data = request.get_json(silent=True) or {}
-    mode = data.get("mode") if data.get("mode") in LISTEN_TIMEOUTS else "once"
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    requested_mode = data.get("mode")
+    mode = (
+        requested_mode
+        if isinstance(requested_mode, str) and requested_mode in LISTEN_TIMEOUTS
+        else "once"
+    )
 
     if not LISTEN_LOCK.acquire(blocking=False):
         return utf8_jsonify({"status": "error", "message": "Already listening."})
 
     try:
-        waiting_for_answer = PROCESSOR.has_pending()
+        LISTEN_CANCEL.clear()
+        with PROCESSOR_LOCK:
+            waiting_for_answer = PROCESSOR.has_pending()
         timeout = CONFIRM_TIMEOUT if waiting_for_answer else LISTEN_TIMEOUTS[mode]
 
-        # Default VAD settings, the same ones main.py uses.
         started = time.monotonic()
-        text = listen_once(require_wake_word=False, start_timeout=timeout)
-        print(
-            f"[EchoOS GUI] {mode:<7} heard {text!r} "
-            f"({time.monotonic() - started:.1f}s incl. recording and Whisper)",
-            flush=True,
+        recognized_text = listen_once(
+            require_wake_word=False,
+            start_timeout=timeout,
+        ) or ""
+        logger.info(
+            "%s heard %r (%.1fs including recording and Whisper)",
+            mode,
+            recognized_text,
+            time.monotonic() - started,
         )
 
-        if not text:
-            if waiting_for_answer:
-                PROCESSOR.cancel()
-                return utf8_jsonify({"status": "rejected", "message": "Cancelled."})
-            if mode == "standby":
-                return utf8_jsonify({"status": "standby_idle"})
-            if mode == "session":
-                return utf8_jsonify({"status": "session_end"})
-            return utf8_jsonify({
-                "status": "no_speech",
-                "message": "I didn't hear anything, please try again.",
-            })
+        if LISTEN_CANCEL.is_set():
+            return utf8_jsonify({"status": "listen_cancelled"})
 
-        heard_wake_word, rest = strip_wake_word(text)
+        with PROCESSOR_LOCK:
+            pending_now = PROCESSOR.has_pending()
 
-        if mode == "standby" and not heard_wake_word:
-            # Say what was heard so a mishearing is visible in the page.
-            return utf8_jsonify({"status": "standby_idle", "heard_text": text})
+            # Recheck cancellation and pending state after recording to avoid
+            # racing a typed yes/no or a newly-created confirmation.
+            if LISTEN_CANCEL.is_set():
+                return utf8_jsonify({"status": "listen_cancelled"})
 
-        if heard_wake_word and not rest:
-            return utf8_jsonify({
-                "status": "ok",
-                "message": "I'm listening.",
-                "heard_text": text,
-            })
+            if waiting_for_answer and not pending_now:
+                return utf8_jsonify({
+                    "status": "confirmation_resolved",
+                    "heard_text": recognized_text,
+                })
 
-        result = PROCESSOR.handle(rest if heard_wake_word else text)
-        result["heard_text"] = text
-        return utf8_jsonify(result)
+            if pending_now:
+                if not recognized_text:
+                    return utf8_jsonify({"status": "confirmation_waiting"})
+                result = PROCESSOR.handle(recognized_text)
+                result["heard_text"] = recognized_text
+                return utf8_jsonify(result)
+
+            if not recognized_text:
+                if mode == "standby":
+                    return utf8_jsonify({"status": "standby_idle"})
+                if mode == "session":
+                    return utf8_jsonify({"status": "session_end"})
+                return utf8_jsonify({
+                    "status": "no_speech",
+                    "message": "I didn't hear anything. Please try again.",
+                })
+
+            heard_wake_word, remaining_text = strip_wake_word(recognized_text)
+            if mode == "standby" and not heard_wake_word:
+                return utf8_jsonify({
+                    "status": "standby_idle",
+                    "heard_text": recognized_text,
+                })
+
+            if heard_wake_word and not remaining_text:
+                return utf8_jsonify({
+                    "status": "ok",
+                    "message": "I'm listening.",
+                    "heard_text": recognized_text,
+                })
+
+            command_text = remaining_text if heard_wake_word else recognized_text
+            result = PROCESSOR.handle(command_text)
+            result["heard_text"] = recognized_text
+            return utf8_jsonify(result)
 
     except Exception:
+        logger.exception("Microphone request failed")
         return utf8_jsonify({
             "status": "error",
-            "message": "Recording failed. Check the microphone and try again.",
+            "message": "Recording failed. Check microphone access and the server log.",
         })
-
     finally:
+        LISTEN_CANCEL.clear()
         LISTEN_LOCK.release()
 
 
-# ── Desktop Window Launcher ─────────────────────────────────────────────────
-def start_flask(port):
-    app.run(debug=False, host="127.0.0.1", port=port, use_reloader=False)
+def _run_browser_server(port):
+    logger.info("Starting local browser interface at http://127.0.0.1:%s", port)
+    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("ECHOOS_GUI_PORT", 5050))
-
-    # Check if user passed --server-only or if pywebview is missing
+    port = int(os.environ.get("ECHOOS_GUI_PORT", "5050"))
     server_only = "--server" in sys.argv
 
-    if server_only:
-        print(f"\n  🤖  EchoOS Server Running at: http://127.0.0.1:{port}\n")
-        app.run(debug=False, host="127.0.0.1", port=port)
+    # Browser mode is the supported launch path on Ubuntu and WSL.
+    if server_only or sys.platform != "win32":
+        _run_browser_server(port)
     else:
         try:
             import webview
+        except Exception:
+            logger.exception("pywebview is unavailable; starting browser mode")
+            _run_browser_server(port)
+        else:
+            # Start one server. A failed native window must not bind the same
+            # port a second time in the browser fallback.
+            from werkzeug.serving import make_server
 
-            # Run Flask in background thread
-            t = threading.Thread(target=start_flask, args=(port,), daemon=True)
-            t.start()
-
-            print(f"\n  🚀  Launching EchoOS Desktop App ({platform.system()})...\n")
-
-            # Create native desktop window
-            window = webview.create_window(
-                title="EchoOS — Voice Controlled Operating System",
-                url=f"http://127.0.0.1:{port}",
-                width=480,
-                height=780,
-                resizable=True,
-                background_color="#080911",
-                text_select=False,
+            server = make_server("127.0.0.1", port, app, threaded=True)
+            server_thread = threading.Thread(
+                target=server.serve_forever,
+                daemon=True,
+                name="echoos-flask",
             )
-            webview.start()
-
-        except Exception as e:
-            print(f"\n  ⚠️  Could not start Desktop Window: {e}")
-            print(f"  Fallback: Running browser server on http://localhost:{port}\n")
-            app.run(debug=False, host="127.0.0.1", port=port)
+            server_thread.start()
+            try:
+                webview.create_window(
+                    title="EchoOS — Voice Controlled Operating System",
+                    url=f"http://127.0.0.1:{port}",
+                    width=480,
+                    height=780,
+                    resizable=True,
+                    background_color="#080911",
+                    text_select=False,
+                )
+                webview.start()
+            except Exception:
+                logger.exception("Native window failed; browser server remains available")
+                print(
+                    f"\n[EchoOS GUI] Open http://127.0.0.1:{port} in your browser.\n",
+                    flush=True,
+                )
+                try:
+                    server_thread.join()
+                except KeyboardInterrupt:
+                    logger.info("Stopping browser server")
+            finally:
+                server.shutdown()
+                server_thread.join(timeout=2)

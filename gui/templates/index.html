@@ -14,8 +14,11 @@
       Echo<span class="logo-accent">OS</span>
     </div>
     <div class="topbar-right">
-      <button class="hf-toggle" id="hfToggle" type="button" title="Listen for “Hi Echo” all the time">Hands-free: off</button>
-      <div class="mode-badge" id="modeBadge">connecting…</div>
+      <div class="status-badges">
+        <div class="mode-badge" id="modeBadge">Core: checking…</div>
+        <div class="audio-badge unavailable" id="audioBadge">Audio: checking…</div>
+      </div>
+      <button class="hf-toggle" id="hfToggle" type="button" title="Listen for “Hi Echo” all the time" disabled>Hands-free: off</button>
     </div>
   </header>
 
@@ -111,7 +114,7 @@
     </div><!-- /robot-wrap -->
 
     <!-- Orb (mic / status indicator) -->
-    <div class="orb-ring" id="orbRing" title="Click to test voice or toggle state">
+    <div class="orb-ring disabled" id="orbRing" title="Click to record one voice command" aria-disabled="true">
       <div class="orb-pulse"></div>
       <div class="orb-core" id="orbCore">
         <!-- mic icon -->

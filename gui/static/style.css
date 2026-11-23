@@ -81,14 +81,33 @@ html, body {
   border-color: rgba(16, 185, 129, 0.35);
   box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
 }
-.mode-badge.mock {
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--warn);
-  border-color: rgba(245, 158, 11, 0.3);
+.mode-badge.offline,
+.audio-badge.unavailable {
+  background: rgba(244, 63, 94, 0.12);
+  color: #fda4af;
+  border-color: rgba(244, 63, 94, 0.3);
+}
+.audio-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  transition: all 0.3s ease;
+}
+.audio-badge.ready {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
 }
 
 /* ── Hands-free toggle ──────────────────────────────── */
-.topbar-right { display: flex; align-items: center; gap: 10px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.status-badges { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.hf-toggle:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 .hf-toggle {
   font: inherit;
   font-size: 0.72rem;
@@ -108,6 +127,7 @@ html, body {
   border-color: rgba(34, 211, 238, 0.4);
   box-shadow: 0 0 12px rgba(34, 211, 238, 0.2);
 }
+.orb-ring.disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ── Stage ──────────────────────────────────────────── */
 .stage {
@@ -173,7 +193,8 @@ html, body {
 }
 
 /* Equalizer mouth bars */
-.eq-bar { transform-origin: bottom center; }
+.eq-bar { transform-box: fill-box; transform-origin: bottom center; }
+.eye-bar { transform-box: fill-box; transform-origin: center; }
 .eq1 { animation: eq 1.3s ease-in-out 0.00s infinite; }
 .eq2 { animation: eq 1.0s ease-in-out 0.18s infinite; }
 .eq3 { animation: eq 0.85s ease-in-out 0.08s infinite; }
@@ -372,6 +393,8 @@ html, body {
 
 .cmd-input {
   flex: 1;
+  user-select: text;
+  -webkit-user-select: text;
   height: 46px;
   background: var(--bg2);
   border: 1px solid rgba(168, 85, 247, 0.22);
@@ -409,3 +432,15 @@ html, body {
 }
 .send-btn:active { transform: scale(0.95); }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+
+@media (max-width: 560px) {
+  .topbar { padding: 0 10px; }
+  .topbar-right { gap: 6px; }
+  .status-badges { gap: 4px; }
+  .mode-badge, .audio-badge, .hf-toggle {
+    font-size: 0.62rem;
+    letter-spacing: 0.02em;
+    padding: 4px 7px;
+  }
+}
