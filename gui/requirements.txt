@@ -6,6 +6,7 @@ Flask>=3.0
 numpy>=1.24
 sounddevice>=0.4.6
 faster-whisper>=1.0.0
+webrtcvad-wheels>=2.0.14.post1
 
 # Native WebView is enabled on Windows. On Ubuntu, the supported default is
 # the local browser server; see gui/README.md for the reason and launch command.
