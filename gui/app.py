@@ -35,6 +35,7 @@ if ROOT_DIR not in sys.path:
 PROCESSOR = None
 PROCESSOR_LOCK = threading.RLock()
 LISTEN_LOCK = threading.Lock()
+LISTEN_CONTROL_LOCK = threading.Lock()
 LISTEN_CANCEL = threading.Event()
 
 try:
@@ -122,8 +123,9 @@ def command():
         return utf8_jsonify({"status": "error", "message": "EchoOS Core is unavailable."})
 
     # Typed commands have priority over an in-progress microphone recording.
-    if LISTEN_LOCK.locked():
-        LISTEN_CANCEL.set()
+    with LISTEN_CONTROL_LOCK:
+        if LISTEN_LOCK.locked():
+            LISTEN_CANCEL.set()
 
     with PROCESSOR_LOCK:
         return utf8_jsonify(PROCESSOR.handle(command_text))
@@ -153,11 +155,12 @@ def listen():
         else "once"
     )
 
-    if not LISTEN_LOCK.acquire(blocking=False):
-        return utf8_jsonify({"status": "error", "message": "Already listening."})
+    with LISTEN_CONTROL_LOCK:
+        if not LISTEN_LOCK.acquire(blocking=False):
+            return utf8_jsonify({"status": "error", "message": "Already listening."})
+        LISTEN_CANCEL.clear()
 
     try:
-        LISTEN_CANCEL.clear()
         with PROCESSOR_LOCK:
             waiting_for_answer = PROCESSOR.has_pending()
         timeout = CONFIRM_TIMEOUT if waiting_for_answer else LISTEN_TIMEOUTS[mode]
@@ -234,8 +237,9 @@ def listen():
             "message": "Recording failed. Check microphone access and the server log.",
         })
     finally:
-        LISTEN_CANCEL.clear()
-        LISTEN_LOCK.release()
+        with LISTEN_CONTROL_LOCK:
+            LISTEN_CANCEL.clear()
+            LISTEN_LOCK.release()
 
 
 def _run_browser_server(port):
