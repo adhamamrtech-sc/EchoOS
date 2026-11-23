@@ -57,9 +57,9 @@ The NLU may understand a command before an action exists for it. Only commands m
 | `create_folder` | implemented | `name`, optional `folder` | `actions/apps_files.py` |
 | `rename_file` | implemented | `old`, `new`, optional `folder` | `actions/apps_files.py` |
 | `list_files` | implemented | optional `folder` | `actions/apps_files.py` |
-| `get_time` | planned | none | Unassigned |
+| `get_time` | implemented | none | `actions/system_network.py` |
 | `screenshot` | planned | none | Unassigned |
-| `show_processes` | planned | none | Unassigned |
+| `show_processes` | implemented | none | Top 5 by CPU; needs psutil (`actions/system_network.py`) |
 | `exit` | planned | none | Handled in `main.py` later |
 | `delete_file` | implemented | `filename`, optional `folder` | Asks first; deletes only a confirmed, unchanged file |
 | `shutdown` | blocked | none | Dangerous: needs confirmation and a safety review |

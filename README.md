@@ -32,6 +32,23 @@ Edit `.env` and set `GEMINI_API_KEY` for the current Decision Engine provider, t
 python main.py
 ```
 
+## GUI
+
+A page to type or speak commands and see the reply. It uses the same pipeline
+as the voice loop (`main.process_text`), so a command behaves the same in both.
+The bridge is `command_processor.py`; the page is in `gui/`.
+
+Ubuntu: `bash gui/setup.sh`, then `bash gui/run.sh` and open
+http://127.0.0.1:5050. Details: [gui/README.md](gui/README.md).
+Windows: run `gui\run.bat`.
+
+Hands-free is on by default: say "Hi Echo", then your commands; silence ends
+the session. Turn it off with the button at the top, and use the round button
+to record one command instead. Risky commands ask for confirmation: answer yes
+or no. The server only accepts connections from the same computer.
+Set `ECHOOS_GUI_SPEAK=1` to also speak replies from the server (espeak).
+
+
 Never commit `.env`, API keys, or other credentials. The repository's `.gitignore` excludes the local environment file.
 
 ## Configuration
