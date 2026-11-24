@@ -61,7 +61,9 @@ log 'Installing Ubuntu system dependencies (sudo may ask for your password)...'
     brightnessctl \
     espeak-ng \
     network-manager \
-    rfkill
+    rfkill \
+    python3-gi \
+    gir1.2-webkit2-4.1
 
 if [[ -e "$VENV_DIR" && ! -x "${VENV_DIR}/bin/python" ]]; then
     fail "${VENV_DIR} already exists but is not a usable virtual environment. It was left untouched; inspect or rename it manually, then rerun this script."
@@ -72,6 +74,12 @@ if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
     "$PYTHON_BIN" -m venv "$VENV_DIR"
 else
     log "Reusing existing virtual environment at ${VENV_DIR}."
+fi
+
+# The app window uses the system GTK/WebKit bindings, so the venv must see
+# system packages. Edited in place so an existing venv keeps working.
+if grep -q '^include-system-site-packages = false' "${VENV_DIR}/pyvenv.cfg" 2>/dev/null; then
+    sed -i 's/^include-system-site-packages = false/include-system-site-packages = true/' "${VENV_DIR}/pyvenv.cfg"
 fi
 
 VENV_PYTHON="${VENV_DIR}/bin/python"
@@ -113,5 +121,8 @@ PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
     "import runpy; runpy.run_path('${SCRIPT_DIR}/app.py', run_name='echoos_gui_setup_smoke')" \
     || fail 'The GUI or EchoOS core could not be imported. Review the error above; no source files were changed.'
 
-log 'Installation completed. Start the browser-based GUI with: bash gui/run.sh'
+log 'Adding EchoOS to the applications menu and desktop...'
+bash "${SCRIPT_DIR}/install_launcher.sh" || log 'Launcher not installed; start EchoOS with: bash gui/run.sh'
+
+log 'Installation completed. Open EchoOS from the applications menu, or run: bash gui/run.sh'
 log 'The first voice command may download the configured faster-whisper model.'

@@ -251,8 +251,10 @@ if __name__ == "__main__":
     port = int(os.environ.get("ECHOOS_GUI_PORT", "5050"))
     server_only = "--server" in sys.argv
 
-    # Browser mode is the supported launch path on Ubuntu and WSL.
-    if server_only or sys.platform != "win32":
+    # --server skips the app window (WSL, or a machine with no desktop).
+    # Otherwise EchoOS opens as a normal app window on Windows and Ubuntu; if
+    # the native window cannot start, the page stays reachable in a browser.
+    if server_only:
         _run_browser_server(port)
     else:
         try:

@@ -11,10 +11,8 @@ stated otherwise.
 - Internet access during installation and the first speech-model download.
 - A microphone supported by ALSA, PulseAudio, or PipeWire for voice input.
 
-The GUI is a local Flask application. On Ubuntu, the documented and supported
-launch path is the browser interface at `http://127.0.0.1:5050`. The Windows
-native WebView dependency is not installed on Ubuntu by this setup. The GUI
-source retains its browser fallback when a native WebView is unavailable.
+The GUI is a local Flask application shown in an app window. On Ubuntu the
+window uses the system WebKitGTK packages, which the installer adds.
 
 ## Install
 
@@ -43,20 +41,26 @@ system Python environment.
 
 ## Run
 
+After `bash gui/setup.sh`, EchoOS is in the Ubuntu applications menu and on the
+desktop (right-click the desktop icon and choose "Allow Launching" if Ubuntu
+asks). Click it: EchoOS opens as a normal app window, hands-free is on, and
+saying "Hi Echo" followed by a command runs it. Closing the window closes EchoOS.
+
+Start it at login too:
+
 ```bash
-bash gui/run.sh
+bash gui/install_launcher.sh --autostart
 ```
 
-Open this address in a browser on the same computer:
+Remove the menu entry, desktop icon and autostart: `bash gui/install_launcher.sh --remove`.
 
-```text
-http://127.0.0.1:5050
-```
+From a terminal: `bash gui/run.sh`. Only one copy runs at a time when started
+from the icon.
 
-Stop the server with `Ctrl+C`. The server binds to loopback only; it is not
-intended to be exposed to the local network or the public internet.
-
-You can also launch it directly:
+The app window shows a page served by a small local server. It binds to
+`127.0.0.1` only (it is not reachable from the network), and you never need to
+type the address. If the app window cannot start (no desktop, for example WSL),
+open `http://127.0.0.1:5050` in a browser, or start browser-only mode with:
 
 ```bash
 .venv/bin/python gui/app.py --server
