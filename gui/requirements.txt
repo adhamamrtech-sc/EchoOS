@@ -11,3 +11,7 @@ webrtcvad-wheels>=2.0.14.post1
 # Native app window. On Ubuntu it needs the apt packages python3-gi and
 # gir1.2-webkit2-4.1 (installed by gui/setup.sh).
 pywebview>=5.0
+
+# Windows shortcut creator (gui/create_shortcut.py).
+# مش مطلوب على Ubuntu — setup.sh بيستخدم install_launcher.sh بدله.
+pywin32>=306; sys_platform == "win32"

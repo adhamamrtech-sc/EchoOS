@@ -126,3 +126,6 @@ bash "${SCRIPT_DIR}/install_launcher.sh" || log 'Launcher not installed; start E
 
 log 'Installation completed. Open EchoOS from the applications menu, or run: bash gui/run.sh'
 log 'The first voice command may download the configured faster-whisper model.'
+log ''
+log 'NOTE (Windows/WSL users): to create Desktop and Start Menu shortcuts run:'
+log '  .venv\Scripts\python.exe gui\create_shortcut.py'
