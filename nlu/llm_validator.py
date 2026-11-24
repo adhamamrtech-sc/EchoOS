@@ -18,7 +18,7 @@ ALLOWED_ACTIONS = set(COMMAND_BY_ACTION.keys())
 # (tests/test_validator_actions_sync.py fails if this set and the Actions layer disagree).
 UNIMPLEMENTED_ACTIONS = frozenset({
     "shutdown", "restart", "exit",                     # dangerous or special, not reviewed yet
-    "get_time", "screenshot", "show_processes",        # unassigned
+    "screenshot",                                    # not implemented
 })
 
 # What the LLM may accept: catalog actions the Actions layer can actually run.
