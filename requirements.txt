@@ -1,4 +1,3 @@
-
 rapidfuzz
 psutil
 pytest
@@ -6,4 +5,7 @@ webrtcvad-wheels
 noisereduce
 google-genai>=1.0
 python-dotenv>=1.0
-sentence-transformers>=3.0
+
+# Optional and heavy (pulls torch + a model, slows startup).
+# Enable only if the accuracy test shows it helps:
+# sentence-transformers>=3.0 

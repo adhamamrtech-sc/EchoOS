@@ -1,86 +1,91 @@
-"""Semantic search using multilingual embeddings."""
-import numpy as np
+"""Semantic search using multilingual embeddings (lazy, optional).
+
+Nothing heavy happens at import time. The model is loaded only the first
+time semantic_search() is actually called, which happens only when the
+rules and RapidFuzz were not confident enough.
+"""
+
+import os
+import threading
+
 from .catalog import EXAMPLE_OWNERS, EXAMPLE_TEXTS
 
 
 MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
-  
+
 _model = None
 _model_failed = False
 _example_vectors = None
+_lock = threading.Lock()
 
 EXAMPLE_KEYS = [command.key for command in EXAMPLE_OWNERS]
 
 
-def get_model():
-    """Load the embedding model only once."""
-    global _model
-    global _model_failed
+def is_enabled() -> bool:
+    """False when turned off with ECHOOS_SEMANTIC=0. Never loads anything."""
+    value = os.environ.get("ECHOOS_SEMANTIC", "1").strip().lower()
+    return value not in ("0", "false", "off", "no") and not _model_failed
 
-    if _model is None and not _model_failed:
+
+def is_loaded() -> bool:
+    """True once the model is in memory. Never triggers loading."""
+    return _example_vectors is not None
+
+
+def _load() -> bool:
+    """Load the model and encode the catalog examples. Runs at most once."""
+    global _model, _model_failed, _example_vectors
+
+    with _lock:
+        if _example_vectors is not None:
+            return True
+
+        if not is_enabled():
+            return False
+
         try:
             from sentence_transformers import SentenceTransformer
 
             _model = SentenceTransformer(MODEL_NAME)
+            _example_vectors = _model.encode(
+                EXAMPLE_TEXTS,
+                normalize_embeddings=True,
+            )
+        except ImportError:
+            _model_failed = True
+            print("[nlu] sentence-transformers not installed: fuzzy matching only.")
         except Exception as error:
             _model_failed = True
             print(f"[nlu] Semantic search disabled: {error}")
 
-    return _model
+        return _example_vectors is not None
 
 
-def get_example_vectors():
-    """Encode catalog examples once and cache them."""
-    global _example_vectors
-
-    model = get_model()
-
-    if model is None:
-        return None
-
-    if _example_vectors is None:
-        _example_vectors = model.encode(
-            EXAMPLE_TEXTS,
-            normalize_embeddings=True,
-        )
-
-    return _example_vectors
-
-
-def warm_up() -> None:
-    """Optional startup warm-up."""
-    get_example_vectors()
-
-
-def cosine_similarity(query_vector, matrix):
-    query_norm = np.linalg.norm(query_vector)
-    matrix_norms = np.linalg.norm(matrix, axis=1)
-    denominator = np.maximum(matrix_norms * query_norm, 1e-10)
-    return (matrix @ query_vector) / denominator
+def warm_up() -> bool:
+    """Optional: load now instead of on first use. Not called by default."""
+    return _load()
 
 
 def semantic_search(text: str) -> dict[str, float]:
-    """Return the best semantic score for each command."""
+    """Return the best semantic score (0..1) for each command."""
     if not text:
         return {}
 
-    model = get_model()
-
-    if model is None:
+    if _example_vectors is None and not _load():
         return {}
 
-    example_vectors = get_example_vectors()
-
-    if example_vectors is None:
+    try:
+        query_vector = _model.encode(text, normalize_embeddings=True)
+    except Exception as error:
+        print(f"[nlu] Semantic search failed: {error}")
         return {}
 
-    query_vector = model.encode(text, normalize_embeddings=True)
-    similarities = cosine_similarity(query_vector, example_vectors)
+    # Both sides are unit vectors, so dot product == cosine similarity.
+    similarities = _example_vectors @ query_vector
     scores = {}
 
     for key, similarity in zip(EXAMPLE_KEYS, similarities):
-        similarity = float(similarity)
-        normalized_score = (similarity + 1.0) / 2.0
+        normalized_score = (float(similarity) + 1.0) / 2.0
         scores[key] = max(scores.get(key, 0.0), normalized_score)
 
     return scores
