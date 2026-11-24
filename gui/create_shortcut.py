@@ -46,7 +46,57 @@ def _resolve_paths() -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
     return project_root, pythonw, app_py, icon_path
 
 
+def _get_shell():
+    """Get WScript.Shell instance."""
+    try:
+        import win32com.client  # type: ignore[import]
+    except ImportError:
+        print("[EchoOS] مكتبة pywin32 مش متنصبة.")
+        print("         نصّبها بـ: .venv\\Scripts\\python.exe -m pip install pywin32")
+        sys.exit(1)
+    return win32com.client.Dispatch("WScript.Shell")
+
+
+def _get_desktop_folder(shell) -> pathlib.Path:
+    """Return the active Desktop folder (handles OneDrive and redirected folders)."""
+    try:
+        desktop_str = shell.SpecialFolders("Desktop")
+        if desktop_str and pathlib.Path(desktop_str).is_dir():
+            return pathlib.Path(desktop_str)
+    except Exception:
+        pass
+
+    import winreg  # type: ignore[import]
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
+        )
+        val, _ = winreg.QueryValueEx(key, "Desktop")
+        winreg.CloseKey(key)
+        expanded = pathlib.Path(os.path.expandvars(val))
+        if expanded.is_dir():
+            return expanded
+    except Exception:
+        pass
+
+    return pathlib.Path.home() / "Desktop"
+
+
+def _get_start_menu_folder(shell) -> pathlib.Path:
+    """Return the user's Start Menu Programs folder."""
+    try:
+        programs_str = shell.SpecialFolders("Programs")
+        if programs_str and pathlib.Path(programs_str).is_dir():
+            return pathlib.Path(programs_str)
+    except Exception:
+        pass
+
+    return pathlib.Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+
+
 def _create_lnk(
+    shell,
     shortcut_path: pathlib.Path,
     target: pathlib.Path,
     arguments: str,
@@ -55,14 +105,6 @@ def _create_lnk(
     description: str,
 ) -> None:
     """Create a .lnk shortcut using Windows Script Host via pywin32."""
-    try:
-        import win32com.client  # type: ignore[import]
-    except ImportError:
-        print("[EchoOS] مكتبة pywin32 مش متنصبة.")
-        print("         نصّبها بـ: .venv\\Scripts\\python.exe -m pip install pywin32")
-        sys.exit(1)
-
-    shell = win32com.client.Dispatch("WScript.Shell")
     shortcut = shell.CreateShortcut(str(shortcut_path))
     shortcut.TargetPath = str(target)
     shortcut.Arguments = arguments
@@ -81,26 +123,11 @@ def _create_lnk(
     shortcut.save()
 
 
-def _get_start_menu_folder() -> pathlib.Path:
-    """Return the user's Start Menu Programs folder."""
-    import winreg  # type: ignore[import]
-    try:
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders",
-        )
-        programs, _ = winreg.QueryValueEx(key, "Programs")
-        winreg.CloseKey(key)
-        return pathlib.Path(programs)
-    except Exception:
-        # Fallback لو الـ registry مش اشتغل
-        return pathlib.Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs"
-
-
 def main() -> None:
     _require_windows()
 
     project_root, pythonw, app_py, icon_path = _resolve_paths()
+    shell = _get_shell()
 
     shortcut_name = "EchoOS.lnk"
     description = "EchoOS — Voice Controlled Operating System"
@@ -109,11 +136,12 @@ def main() -> None:
 
     created = []
 
-    # 1. Desktop shortcut
-    desktop = pathlib.Path.home() / "Desktop"
+    # 1. Desktop shortcut (يدعم OneDrive وجميع مسارات Desktop الموجهة)
+    desktop = _get_desktop_folder(shell)
     if desktop.is_dir():
         desktop_lnk = desktop / shortcut_name
         _create_lnk(
+            shell=shell,
             shortcut_path=desktop_lnk,
             target=pythonw,
             arguments=arguments,
@@ -125,10 +153,11 @@ def main() -> None:
         print(f"[EchoOS] ✓ Desktop shortcut: {desktop_lnk}")
 
     # 2. Start Menu shortcut
-    start_menu = _get_start_menu_folder() / "EchoOS"
+    start_menu = _get_start_menu_folder(shell) / "EchoOS"
     start_menu.mkdir(parents=True, exist_ok=True)
     start_menu_lnk = start_menu / shortcut_name
     _create_lnk(
+        shell=shell,
         shortcut_path=start_menu_lnk,
         target=pythonw,
         arguments=arguments,
