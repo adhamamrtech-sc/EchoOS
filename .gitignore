@@ -1,6 +1,14 @@
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+*.egg-info/
+build/
+dist/
 *.wav
 *.mp3
 models/
@@ -10,5 +18,6 @@ models/
 *.bak
 *.zip
 model_vosk/
+recordings/
 .DS_Store
 __MACOSX/
