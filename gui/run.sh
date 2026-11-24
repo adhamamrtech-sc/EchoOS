@@ -25,6 +25,5 @@ then
     exit 1
 fi
 
-printf '\n[EchoOS GUI] Starting the local browser interface...\n'
-printf '[EchoOS GUI] Open http://127.0.0.1:5050 in your browser.\n\n'
-exec "$PYTHON" "${SCRIPT_DIR}/app.py" --server "$@"
+printf '\n[EchoOS GUI] Starting EchoOS...\n'
+exec "$PYTHON" "${SCRIPT_DIR}/app.py" "$@"

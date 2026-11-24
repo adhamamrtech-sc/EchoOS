@@ -8,6 +8,10 @@ sounddevice>=0.4.6
 faster-whisper>=1.0.0
 webrtcvad-wheels>=2.0.14.post1
 
-# Native WebView is enabled on Windows. On Ubuntu, the supported default is
-# the local browser server; see gui/README.md for the reason and launch command.
-pywebview>=5.0; sys_platform == "win32"
+# Native app window. On Ubuntu it needs the apt packages python3-gi and
+# gir1.2-webkit2-4.1 (installed by gui/setup.sh).
+pywebview>=5.0
+
+# Windows shortcut creator (gui/create_shortcut.py).
+# مش مطلوب على Ubuntu — setup.sh بيستخدم install_launcher.sh بدله.
+pywin32>=306; sys_platform == "win32"

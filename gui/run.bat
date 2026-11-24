@@ -3,6 +3,10 @@ setlocal
 title EchoOS GUI
 
 for %%I in ("%~dp0..") do set "PROJECT_ROOT=%%~fI"
+
+rem pythonw.exe بيشغّل التطبيق من غير ما يفتح نافذة terminal
+set "PYTHONW=%PROJECT_ROOT%\.venv\Scripts\pythonw.exe"
+rem python.exe بنستخدمه بس للتشيك على الـ dependencies
 set "PYTHON=%PROJECT_ROOT%\.venv\Scripts\python.exe"
 
 if not exist "%PYTHON%" (
@@ -32,14 +36,9 @@ if errorlevel 1 (
 )
 
 echo.
-echo [EchoOS GUI] Starting EchoOS GUI...
+echo [EchoOS GUI] Starting EchoOS GUI (no terminal window)...
 echo Browser fallback: http://127.0.0.1:5050
 echo.
-"%PYTHON%" "%~dp0app.py"
-set "EXIT_CODE=%ERRORLEVEL%"
-if not "%EXIT_CODE%"=="0" (
-    echo.
-    echo [EchoOS GUI] Exited with code %EXIT_CODE%.
-    pause
-)
-exit /b %EXIT_CODE%
+rem pythonw.exe بيشغّل app.py من غير ما يفتح terminal
+start "" "%PYTHONW%" "%~dp0app.py"
+exit /b 0

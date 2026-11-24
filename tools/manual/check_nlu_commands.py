@@ -26,9 +26,12 @@ TEST_COMMANDS = [
     "restart",
     "hello something random",
     "volume  100 خلي ",
-    "ايد ال صوت",
-    "ariana ",
-    "خلي الصوت علي 40",
+    "create file notes.txt",
+    "create folder projects",
+    "rename old.txt to new.txt",
+    "delete report.pdf",
+    "show processes",
+    "show ram and disk usage",
 ]
 
 
