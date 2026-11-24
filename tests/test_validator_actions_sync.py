@@ -37,9 +37,11 @@ SAMPLES = {
     "volume_up": {"params": {}},
     "lock_screen": {"params": {}},
     "get_network_status": {"params": {}},
+    "get_time": {"params": {}},
     "set_wifi": {"params": {"state": "on"}},
     "set_bluetooth": {"params": {"state": "on"}},
     "get_system_info": {"params": {"metrics": ["cpu"]}},
+    "show_processes": {"params": {}},
 }
 
 
