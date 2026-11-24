@@ -24,6 +24,7 @@ from google import genai
 from google.genai import types
 
 from .catalog import APPS, FOLDERS, COMMANDS
+from .llm_validator import LLM_ALLOWED_ACTIONS
 
 
 logger = logging.getLogger(__name__)
@@ -558,6 +559,10 @@ class GeminiProvider:
             ):
                 continue
 
+            # Do not offer Gemini actions the Actions layer cannot run;
+            # the validator would reject them anyway.
+            if action not in LLM_ALLOWED_ACTIONS:
+                continue
             commands_by_action.setdefault(
                 action,
                 [],
