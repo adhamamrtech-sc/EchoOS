@@ -4,7 +4,7 @@ import numpy as np
 
 def test_live_pipeline():
     print("---- test live pipeline for asr and voice ---")
-    print("please speak now,note that we recording only 5 seconds!")
+    print("please speak now,note that we're recording only 5 seconds!")
 
     #recording real voice 
     audio_array = record(5)

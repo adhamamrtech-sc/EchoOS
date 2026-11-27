@@ -10,9 +10,9 @@ def record_test_command():
        name = "test_user"
 
     filename = f"{name}.wav"
-    print("we're recording 10 seconds, speak now!")
+    print("we're recording 3 seconds, speak now!")
 
-    audio_data = record(10)
+    audio_data = record(3)
     if audio_data is not None:
       #turn it into .WAV
       audio_int16 = (audio_data*32767).astype('int16')

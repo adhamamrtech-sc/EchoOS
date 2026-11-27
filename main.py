@@ -7,7 +7,6 @@ from nlu.normalize import normalize, strip_fillers
 from actions import run
 from feedback import speak
 
-
 class LazyGeminiProvider:
     """Create Gemini only when an LLM request is needed."""
 
