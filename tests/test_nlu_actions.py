@@ -11,7 +11,7 @@ from nlu.catalog import COMMANDS
 # Remove a name from this set as soon as its handler is in ALLOWED_ACTIONS.
 PENDING = {
     "shutdown", "restart", "exit",                     # dangerous or special, not reviewed yet
-    "get_time", "screenshot", "show_processes",        # unassigned
+     "screenshot",                                     # unassigned
 }
 
 

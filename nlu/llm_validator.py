@@ -12,6 +12,18 @@ from .catalog import (
 
 ALLOWED_ACTIONS = set(COMMAND_BY_ACTION.keys())
 
+# Catalog actions that the Actions layer cannot run yet (not in actions.ALLOWED_ACTIONS).
+# The NLU can still recognise them, but an LLM must never "accept" them: nothing could execute them.
+# Remove a name from here in the same change that adds its handler to actions.ALLOWED_ACTIONS
+# (tests/test_validator_actions_sync.py fails if this set and the Actions layer disagree).
+UNIMPLEMENTED_ACTIONS = frozenset({
+    "shutdown", "restart", "exit",                     # dangerous or special, not reviewed yet
+    "screenshot",                                    # not implemented
+})
+
+# What the LLM may accept: catalog actions the Actions layer can actually run.
+LLM_ALLOWED_ACTIONS = frozenset(ALLOWED_ACTIONS - UNIMPLEMENTED_ACTIONS)
+
 DANGEROUS_ACTIONS = {
     action
     for action, command in COMMAND_BY_ACTION.items()
@@ -64,7 +76,7 @@ def validate_llm_result(result):
 
         action = result.get("action")
 
-        if not isinstance(action, str) or action not in ALLOWED_ACTIONS:
+        if not isinstance(action, str) or action not in LLM_ALLOWED_ACTIONS:
             return {
                 "status": "rejected",
                 "reason": "unsupported_action",

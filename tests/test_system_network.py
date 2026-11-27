@@ -243,3 +243,20 @@ def test_invalid_params_do_not_crash():
     })
 
     assert result["status"] == "error"
+# ------------------TIME AND PROCESSES -----------------------
+def test_get_time_return_spoken_time():
+    result = system_network.get_time({})
+    assert result["status"] =="ok"
+    assert result["message"].startswith("The time is")
+
+def test_show_processes_return_top_five():
+    result = system_network.show_processes({})
+    assert result["status"] == "ok"
+    assert "%" in result["message"]
+    assert len(result["message"].split("), ")) <= 5
+
+def test_show_processes_without_psutil():
+    with patch.dict("sys.modules", {"psutil": None}):
+        result = system_network.show_processes({})
+    assert result["status"] == "error"
+    assert "psutil" in result["message"]

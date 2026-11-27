@@ -35,6 +35,23 @@ Optional settings (set before `python main.py`):
 | `ECHOOS_WHISPER`  | `tiny`, `base`, `small`, `medium`       | `small` |
 | `ECHOOS_LANG`     | `en`, `ar`, `auto`                      | `en`    |
 
+## GUI
+
+A small window/page to type or speak commands and see the reply. It uses the
+same pipeline as the voice loop (`main.process_text`), so a command behaves the
+same in both. The bridge is `command_processor.py`; the page is in `gui/`.
+
+    source .venv/bin/activate
+    pip install -r gui/requirements.txt
+    python gui/app.py            # opens the EchoOS window
+
+Windows: run `gui\run.bat`. If the window library is missing it falls back to
+the browser at http://localhost:5050. Hands-free is on by default: say
+"Hi Echo", then your commands; silence ends the session. Turn it off with the
+button at the top, and use the round button to record one command instead. Risky commands ask for confirmation: answer yes or no.
+The server only accepts connections from the same computer.
+Set `ECHOOS_GUI_SPEAK=1` to also speak replies from the server (espeak).
+
 ## Tests
 
     pytest -rs

@@ -54,9 +54,9 @@ change its row here and remove it from `PENDING` in `tests/test_nlu_actions.py`.
 | `create_folder`      | implemented         | `name`, optional `folder` | Dana                                                 |
 | `rename_file`        | implemented         | `old`, `new`, optional `folder` | Dana                                                 |
 | `list_files`         | implemented         | optional `folder`         | Dana                                                 |
-| `get_time`           | planned         | none                      | unassigned                                           |
+| `get_time`           | implemented         | none                  |Menna                                                 |
 | `screenshot`         | planned         | none                      | unassigned                                           |
-| `show_processes`     | planned         | none                      | unassigned                                           |
+| `show_processes`     | implemented         | none                  |Menna. Top 5 by CPU, needs psutil                                           |
 | `exit`               | planned         | none                      | handled in `main.py` later                           |
 | `delete_file`        | implemented         | `filename`, optional `folder` | asks first; deletes only a confirmed, unchanged file (Dana)    |
 | `shutdown`           | blocked         | none                      | dangerous: needs confirmation and a safety review    |

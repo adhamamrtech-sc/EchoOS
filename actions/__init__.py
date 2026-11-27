@@ -12,6 +12,8 @@ ALLOWED_ACTIONS = {
     "confirm_wifi_off": system_network.confirm_wifi_off,
     "set_bluetooth": system_network.set_bluetooth,
     "get_system_info": system_network.get_system_info,
+    "get_time": system_network.get_time,
+    "show_processes": system_network.show_processes,
 }
 
 # open_app, close_app, open_folder, list_files, create_file, create_folder,
